@@ -315,6 +315,38 @@ window.isMeaningfullyDifferentPoiName = function(name, address) {
   .preview-lbl::after { content: ''; flex: 1; height: 1px; background: #2A2810; }
   .preview-txt { font-size: 12.5px; color: #E8D98A; font-family: 'SF Mono','Fira Code',monospace; white-space: pre-wrap; line-height: 1.7; }
 
+  /* ── Active calls board ── */
+  .board { margin-top: 1.75rem; }
+  .board-empty { background: #fff; border: 1px dashed #DDD09A; border-radius: 14px; padding: 1.1rem; text-align: center; font-size: 13px; color: #9A8050; }
+  .call-card { background: #fff; border: 1px solid #DDD09A; border-radius: 16px; overflow: hidden; margin-bottom: 12px; box-shadow: 0 2px 12px rgba(180,140,20,0.08); }
+  .call-card.urgent { border-color: #E03000; box-shadow: 0 0 0 2px rgba(224,48,0,0.15); }
+  .call-card-hdr { background: #0F0E06; padding: 0.7rem 1rem; display: flex; align-items: center; gap: 8px; }
+  .call-card-num { color: #C8A532; font-weight: 700; font-size: 15px; }
+  .call-card-time { color: #7A6830; font-size: 12px; margin-left: auto; }
+  .call-urgent-tag { background: #E03000; color: #fff; font-size: 10px; font-weight: 700; letter-spacing: 1px; padding: 2px 7px; border-radius: 4px; }
+  .call-card-body { padding: 0.9rem 1rem 1rem; background: #FDFBF0; }
+  .call-line { font-size: 13.5px; color: #1A1400; line-height: 1.5; margin-bottom: 3px; word-break: break-word; }
+  .call-line b { color: #6B5515; font-weight: 600; }
+  .call-noreply { font-size: 11px; color: #B07020; margin-top: 4px; }
+  .unit-list { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+  .unit-chip { display: inline-flex; align-items: center; gap: 5px; padding: 4px 6px 4px 10px; border-radius: 999px; font-size: 12.5px; font-weight: 600; }
+  .unit-chip.responding { background: #E6F2E6; color: #1E5E22; border: 1px solid #9CCB9F; }
+  .unit-chip.backup { background: #FFF1D6; color: #8A5A00; border: 1px solid #E8C26E; }
+  .unit-chip .role { font-weight: 500; opacity: 0.8; }
+  .unit-chip button { background: none; border: none; color: inherit; opacity: 0.55; cursor: pointer; font-size: 15px; line-height: 1; padding: 0 2px; font-family: inherit; }
+  .unit-chip button:hover { opacity: 1; }
+  .unit-none { font-size: 12px; color: #9A8050; }
+  .unit-row { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: center; }
+  .unit-row input { padding: 9px 12px; }
+  .unit-btn { border: none; border-radius: 9px; padding: 10px 12px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; white-space: nowrap; }
+  .unit-btn.assign { background: #2E7D32; color: #fff; }
+  .unit-btn.assign:hover { background: #388E3C; }
+  .unit-btn.backup { background: #C88A12; color: #fff; }
+  .unit-btn.backup:hover { background: #D89A22; }
+  .clear-call-btn { margin-top: 10px; width: 100%; border: 1.5px solid #8B2000; background: transparent; color: #B02800; border-radius: 10px; padding: 10px; font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit; display: flex; align-items: center; justify-content: center; gap: 6px; }
+  .clear-call-btn:hover { background: #FFF0EA; }
+  .unit-btn:disabled, .clear-call-btn:disabled { opacity: 0.5; cursor: wait; }
+
   /* ── Responsive / Mobile ── */
   @media (max-width: 600px) {
     /* Page */
@@ -386,6 +418,10 @@ window.isMeaningfullyDifferentPoiName = function(name, address) {
     /* Sub header */
     .sub-hdr { font-size: 10px; margin: 1rem 0 0.75rem; }
 
+    /* Active calls: stack unit buttons under the input */
+    .unit-row { grid-template-columns: 1fr 1fr; }
+    .unit-row input { grid-column: 1 / -1; font-size: 16px; }
+
     /* Clear btn in card header */
     .clear-btn { padding: 5px 10px; font-size: 11px; }
   }
@@ -416,7 +452,7 @@ window.isMeaningfullyDifferentPoiName = function(name, address) {
   <div class="form-card">
     <div class="card-hdr">
       <div class="card-ttl"><i class="ti ti-alert-triangle"></i> Dispatch Form</div>
-      <button class="clear-btn" onclick="window.clearForm()"><i class="ti ti-refresh" style="font-size:13px;"></i> Clear Call</button>
+      <button class="clear-btn" onclick="window.clearForm()"><i class="ti ti-refresh" style="font-size:13px;"></i> New Call</button>
     </div>
 
     <div class="card-body">
@@ -700,6 +736,16 @@ window.isMeaningfullyDifferentPoiName = function(name, address) {
     <div class="preview-lbl">Message preview</div>
     <div class="preview-txt" id="previewText"></div>
   </div>
+
+  <!-- Active calls board -->
+  <div class="board">
+    <div class="section-row">
+      <div class="dot"></div>
+      <div class="section-lbl">Active calls <span id="activeCallCount"></span></div>
+    </div>
+    <div id="activeCallsList"><div class="board-empty">Loading active calls...</div></div>
+    <datalist id="knownUnitsList"></datalist>
+  </div>
 </div>
 
 <!-- Locked inside modal -->
@@ -783,7 +829,7 @@ window.isMeaningfullyDifferentPoiName = function(name, address) {
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-app.js";
-import { getDatabase, ref, get, set, onValue, runTransaction } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-database.js";
+import { getDatabase, ref, get, set, update, remove, onValue, runTransaction } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-database.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyBLbU8jdXP7UEtkndbpcM1I3EeZcChtMpU",
@@ -3021,12 +3067,14 @@ window.dispatchWhatsApp = async function() {
 
   if (sent.ok) {
     await saveCallNumber(d.callNum);
+    await createActiveCall(d, sent.messageId);
     showToast('\u2713 Sent to Bergen County Chaverim Dispatch');
   } else {
     // WAHA didn't work — fall back to the old way so the call still goes out
     console.warn('WAHA send failed:', sent.error);
     showToast('WAHA failed (' + sent.error + ') \u2014 opening WhatsApp instead');
     await saveCallNumber(d.callNum);
+    await createActiveCall(d, '');
     openExternalLink('https://wa.me/?text=' + encodeURIComponent(msg));
   }
 };
@@ -3037,16 +3085,18 @@ window.dispatchWhatsApp = async function() {
 // session "Personal_BC_Dispatch" and group 120363264369523011@g.us.
 const WAHA_PROXY_URL = 'https://bc-waha.shmueleidelman-work.workers.dev/send';
 
-async function sendViaWaha(text) {
+async function sendViaWaha(text, replyTo) {
   try {
+    var payload = { text: text };
+    if (replyTo) payload.reply_to = replyTo;
     var resp = await fetch(WAHA_PROXY_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: text })
+      body: JSON.stringify(payload)
     });
     var data = await resp.json().catch(function() { return null; });
     if (!resp.ok) return { ok: false, error: (data && data.error) ? data.error : ('HTTP ' + resp.status) };
-    return { ok: true };
+    return { ok: true, messageId: (data && data.messageId) ? data.messageId : '' };
   } catch (e) {
     return { ok: false, error: 'could not reach relay' };
   }
@@ -3076,6 +3126,229 @@ window.dispatchInterstate = async function() {
   await saveCallNumber(d.callNum);
   openExternalLink('https://wa.me/18458524357?text=' + encodeURIComponent(msg));
 };
+
+// ── Active calls board ──────────────────────────────────────────────
+// Calls live in Firebase at activeCalls/<id> while open, and move to
+// callHistory/<id> when cleared. Every update (unit responding, unit backing
+// up, call cleared) is posted to the BC Dispatch group as a WhatsApp REPLY to
+// the original call message, so it shows up threaded under that call.
+window._activeCalls = {};
+
+function escapeHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+
+// Firebase keys can't contain . # $ [ ] /
+function fbKey(s) {
+  return String(s || '').trim().replace(/[.#$\[\]\/\s]+/g, '_').slice(0, 60);
+}
+
+async function createActiveCall(d, waMessageId) {
+  var id = d.callNum ? fbKey(d.callNum) : ('U' + Date.now());
+  var call = {
+    id: id,
+    callNum: d.callNum || '',
+    location: d.location || '',
+    poiName: d.poiName || '',
+    nature: d.nature || '',
+    phone: d.phone || '',
+    name: d.name || '',
+    urgent: !!d.urgent,
+    lockedInside: window.lockedInsideNote || '',
+    lat: d.lat || null,
+    lng: d.lng || null,
+    waMessageId: waMessageId || '',
+    createdAt: Date.now()
+  };
+  try {
+    await set(ref(db, 'activeCalls/' + id), call);
+  } catch (e) {
+    console.warn('Could not save active call:', e);
+    showToast('Call sent, but it could not be added to the call board');
+  }
+}
+
+function callLabel(call) {
+  return call.callNum ? ('Call#' + call.callNum) : 'Call';
+}
+
+// Posts an update as a reply to the call's original message. If WAHA is down,
+// falls back to opening WhatsApp so the update still goes out.
+async function postCallUpdate(call, text) {
+  // If we don't have the original message to reply to, add the location so
+  // the group still knows which call this is about.
+  if (!call.waMessageId && call.location) text += '\n' + call.location;
+  var sent = await sendViaWaha(text, call.waMessageId || '');
+  if (!sent.ok) {
+    console.warn('WAHA update failed:', sent.error);
+    showToast('WAHA failed (' + sent.error + ') — opening WhatsApp instead');
+    openExternalLink('https://wa.me/?text=' + encodeURIComponent(text));
+    return false;
+  }
+  return true;
+}
+
+function setCardBusy(id, busy) {
+  var card = document.getElementById('callCard_' + id);
+  if (!card) return;
+  card.querySelectorAll('button, input').forEach(function(el) { el.disabled = busy; });
+}
+
+window.callAddUnit = async function(id, role) {
+  var call = window._activeCalls[id];
+  if (!call) return;
+  var input = document.getElementById('unitInput_' + id);
+  var unit = input ? input.value.trim().toUpperCase() : '';
+  if (!unit) { showToast('Type a unit number first'); if (input) input.focus(); return; }
+
+  var key = fbKey(unit);
+  var existing = call.units && call.units[key];
+  if (existing && existing.role === role) {
+    showToast(unit + ' is already ' + (role === 'backup' ? 'backing up' : 'on this call'));
+    return;
+  }
+
+  var text = role === 'backup'
+    ? ('*' + unit + '* backing up — ' + callLabel(call))
+    : ('*' + unit + '* responding — ' + callLabel(call));
+
+  setCardBusy(id, true);
+  if (input) input.value = ''; // clear before saving — the board redraws on save
+  try {
+    var updates = {};
+    updates['activeCalls/' + id + '/units/' + key] = { unit: unit, role: role, at: Date.now() };
+    updates['knownUnits/' + key] = unit;
+    await update(ref(db), updates);
+    if (await postCallUpdate(call, text)) showToast('✓ ' + unit + (role === 'backup' ? ' backing up' : ' responding'));
+  } catch (e) {
+    console.warn('Could not add unit:', e);
+    var again = document.getElementById('unitInput_' + id);
+    if (again) again.value = unit; // put it back so they can retry
+    showToast('Could not save — check connection');
+  }
+  setCardBusy(id, false);
+};
+
+// Removes a unit from the board only (for typos). No WhatsApp message.
+window.callRemoveUnit = async function(id, key) {
+  var call = window._activeCalls[id];
+  if (!call || !call.units || !call.units[key]) return;
+  if (!confirm('Remove ' + call.units[key].unit + ' from ' + callLabel(call) + '?\n(No message is sent to the group.)')) return;
+  try { await remove(ref(db, 'activeCalls/' + id + '/units/' + key)); }
+  catch (e) { showToast('Could not save — check connection'); }
+};
+
+window.callClear = async function(id) {
+  var call = window._activeCalls[id];
+  if (!call) return;
+  if (!confirm('Clear ' + callLabel(call) + '?\nA "call cleared" message will be sent to the group.')) return;
+
+  var units = call.units ? Object.keys(call.units).map(function(k) { return call.units[k].unit; }) : [];
+  var text = '*CALL CLEARED* — ' + callLabel(call);
+  if (units.length) text += '\nUnits: ' + units.join(', ');
+
+  setCardBusy(id, true);
+  try {
+    var history = Object.assign({}, call, { clearedAt: Date.now() });
+    var updates = {};
+    updates['callHistory/' + id + '_' + call.createdAt] = history;
+    updates['activeCalls/' + id] = null;
+    await update(ref(db), updates);
+    if (await postCallUpdate(call, text)) showToast('✓ ' + callLabel(call) + ' cleared');
+  } catch (e) {
+    console.warn('Could not clear call:', e);
+    showToast('Could not save — check connection');
+    setCardBusy(id, false);
+  }
+};
+
+function formatTime(ms) {
+  if (!ms) return '';
+  var dt = new Date(ms);
+  return dt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+}
+
+function renderActiveCalls() {
+  var listEl = document.getElementById('activeCallsList');
+  var countEl = document.getElementById('activeCallCount');
+  if (!listEl) return;
+
+  // Keep anything the dispatcher is in the middle of typing
+  var typed = {}, focusedId = null;
+  listEl.querySelectorAll('input[id^="unitInput_"]').forEach(function(inp) {
+    typed[inp.id] = inp.value;
+    if (document.activeElement === inp) focusedId = inp.id;
+  });
+
+  var calls = Object.keys(window._activeCalls).map(function(k) { return window._activeCalls[k]; });
+  calls.sort(function(a, b) { return (b.createdAt || 0) - (a.createdAt || 0); });
+  if (countEl) countEl.textContent = calls.length ? '(' + calls.length + ')' : '';
+
+  if (!calls.length) {
+    listEl.innerHTML = '<div class="board-empty">No active calls</div>';
+    return;
+  }
+
+  listEl.innerHTML = calls.map(function(call) {
+    var id = escapeHtml(call.id);
+    var units = call.units ? Object.keys(call.units).map(function(k) {
+      var u = call.units[k];
+      return '<span class="unit-chip ' + (u.role === 'backup' ? 'backup' : 'responding') + '">' +
+        escapeHtml(u.unit) + ' <span class="role">' + (u.role === 'backup' ? 'backing up' : 'responding') + '</span>' +
+        '<button type="button" title="Remove" onclick="window.callRemoveUnit(\'' + id + '\',\'' + escapeHtml(k) + '\')">&times;</button></span>';
+    }).join('') : '<span class="unit-none">No units yet</span>';
+
+    return '<div class="call-card' + (call.urgent ? ' urgent' : '') + '" id="callCard_' + id + '">' +
+      '<div class="call-card-hdr">' +
+        (call.urgent ? '<span class="call-urgent-tag">URGENT</span>' : '') +
+        '<span class="call-card-num">' + escapeHtml(callLabel(call)) + '</span>' +
+        '<span class="call-card-time">' + escapeHtml(formatTime(call.createdAt)) + '</span>' +
+      '</div>' +
+      '<div class="call-card-body">' +
+        (call.lockedInside ? '<div class="call-line" style="color:#B02800;font-weight:700;">' + escapeHtml(call.lockedInside.toUpperCase()) + '</div>' : '') +
+        '<div class="call-line"><b>Nature:</b> ' + escapeHtml(call.nature || '—') + '</div>' +
+        '<div class="call-line"><b>Location:</b> ' + escapeHtml((call.poiName ? call.poiName + ' — ' : '') + (call.location || '—')) + '</div>' +
+        ((call.name || call.phone) ? '<div class="call-line"><b>Caller:</b> ' + escapeHtml([call.name, call.phone].filter(Boolean).join(' · ')) + '</div>' : '') +
+        (call.waMessageId ? '' : '<div class="call-noreply">Updates for this call will be sent as new messages (no original message to reply to).</div>') +
+        '<div class="unit-list">' + units + '</div>' +
+        '<div class="unit-row">' +
+          '<input type="text" id="unitInput_' + id + '" list="knownUnitsList" placeholder="Unit # (e.g. BC-12)" autocomplete="off" ' +
+            'onkeydown="if(event.key===\'Enter\'){event.preventDefault();window.callAddUnit(\'' + id + '\',\'responding\');}" />' +
+          '<button type="button" class="unit-btn assign" onclick="window.callAddUnit(\'' + id + '\',\'responding\')">Responding</button>' +
+          '<button type="button" class="unit-btn backup" onclick="window.callAddUnit(\'' + id + '\',\'backup\')">Backing up</button>' +
+        '</div>' +
+        '<button type="button" class="clear-call-btn" onclick="window.callClear(\'' + id + '\')"><i class="ti ti-circle-check"></i> Clear call</button>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+
+  Object.keys(typed).forEach(function(inpId) {
+    var inp = document.getElementById(inpId);
+    if (inp) inp.value = typed[inpId];
+  });
+  if (focusedId) { var f = document.getElementById(focusedId); if (f) f.focus(); }
+}
+
+// Live updates — the board refreshes on its own whenever anything changes
+onValue(ref(db, 'activeCalls'), function(snap) {
+  window._activeCalls = snap.exists() ? snap.val() : {};
+  renderActiveCalls();
+}, function(err) {
+  console.warn('Active calls listener error:', err);
+  var listEl = document.getElementById('activeCallsList');
+  if (listEl) listEl.innerHTML = '<div class="board-empty">Could not load active calls — check connection</div>';
+});
+
+// Remembered unit numbers for the type-ahead list
+onValue(ref(db, 'knownUnits'), function(snap) {
+  var dl = document.getElementById('knownUnitsList');
+  if (!dl) return;
+  var units = snap.exists() ? Object.values(snap.val()) : [];
+  units.sort();
+  dl.innerHTML = units.map(function(u) { return '<option value="' + escapeHtml(u) + '"></option>'; }).join('');
+});
 
 window.verifyLocation = function() {
   var loc = document.getElementById('location').value;
