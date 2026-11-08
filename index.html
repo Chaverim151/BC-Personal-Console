@@ -1233,18 +1233,46 @@ window.showI911ResultModal = function(lat, lng, accuracy) {
 
   document.getElementById('i911ResultModal').classList.add('on');
 
+  // Google first; if it can't (e.g. Geocoding API not enabled on the key),
+  // fall back to OpenStreetMap, which needs no key.
+  function setAddress(addr) {
+    if (window._i911PendingLatLng !== pendingRef) return; // modal moved on
+    addrEl.textContent = addr;
+    window._i911PendingAddress = addr;
+  }
+  var pendingRef = window._i911PendingLatLng;
+  var googleStatus = 'not loaded';
+
+  function tryOsm() {
+    fetch('https://nominatim.openstreetmap.org/reverse?format=jsonv2&addressdetails=1&zoom=18&lat=' + lat + '&lon=' + lng, {
+      headers: { 'Accept-Language': 'en' }
+    })
+      .then(function(r) { return r.ok ? r.json() : null; })
+      .then(function(j) {
+        var a = j && j.address;
+        if (!a) throw new Error('no address');
+        var street = [a.house_number, a.road || a.pedestrian || a.footway].filter(Boolean).join(' ');
+        var town = a.city || a.town || a.village || a.hamlet || a.suburb || a.county || '';
+        var parts = [street || (j.name || ''), town, [a.state, a.postcode].filter(Boolean).join(' ')].filter(Boolean);
+        if (!parts.length) throw new Error('empty');
+        setAddress(parts.join(', '));
+      })
+      .catch(function() {
+        if (window._i911PendingLatLng !== pendingRef) return;
+        console.warn('Reverse geocode failed. Google status:', googleStatus);
+        addrEl.textContent = 'Could not resolve a street address (Google: ' + googleStatus + ')';
+      });
+  }
+
   if (window.google && google.maps && google.maps.Geocoder) {
     var geocoder = new google.maps.Geocoder();
     geocoder.geocode({ location: { lat: lat, lng: lng } }, function(results, status) {
-      if (status === 'OK' && results && results[0]) {
-        addrEl.textContent = results[0].formatted_address;
-        window._i911PendingAddress = results[0].formatted_address;
-      } else {
-        addrEl.textContent = 'Could not resolve a street address for this location';
-      }
+      googleStatus = status;
+      if (status === 'OK' && results && results[0]) setAddress(results[0].formatted_address);
+      else { console.warn('Google reverse geocode status:', status); tryOsm(); }
     });
   } else {
-    addrEl.textContent = 'Address lookup unavailable';
+    tryOsm();
   }
 };
 
