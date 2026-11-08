@@ -328,6 +328,7 @@ window.isMeaningfullyDifferentPoiName = function(name, address) {
   .ptt-mute { width: 30px; height: 30px; border-radius: 8px; border: 1.5px solid #C8A532; background: #0F0E06; color: #C8A532; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.3); padding: 0; }
   .ptt-mute i { font-size: 16px; }
   .ptt-mute.muted { color: #E05000; border-color: #E05000; }
+  .ptt-mute.listening { color: #0F0E06; background: #C8A532; animation: ptt-pulse 1s infinite; }
   @keyframes ptt-pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(249,168,37,0.5), 0 6px 20px rgba(0,0,0,0.35); } 50% { box-shadow: 0 0 0 10px rgba(249,168,37,0), 0 6px 20px rgba(0,0,0,0.35); } }
   .ptt-channel { background: #0F0E06; color: #C8A532; border: 1.5px solid #C8A532; border-radius: 8px; font-size: 12px; font-weight: 700; padding: 5px 26px 5px 9px; width: auto; max-width: 150px; font-family: inherit; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.3); background-position: right 8px center; }
   .ptt-channel:focus { background-color: #0F0E06; }
@@ -456,6 +457,7 @@ window.isMeaningfullyDifferentPoiName = function(name, address) {
 <!-- Zello two-way radio: listens to the picked channel, hold to talk -->
 <div class="ptt-wrap">
   <div class="ptt-row">
+    <button type="button" class="ptt-mute" id="pttKeyBtn" onclick="window.setPttKey()" title="Push-to-talk key: Space (click to change)"><i class="ti ti-keyboard"></i></button>
     <button type="button" class="ptt-mute" id="pttMute" onclick="window.toggleZelloMute()" title="Mute incoming audio"><i class="ti ti-volume"></i></button>
     <select class="ptt-channel" id="pttChannel" aria-label="Zello channel">
       <option value="01 Dispatch">01 Dispatch</option>
@@ -3264,9 +3266,9 @@ function callLabel(call) {
 // Posts an update as a reply to the call's original message. If WAHA is down,
 // falls back to opening WhatsApp so the update still goes out.
 async function postCallUpdate(call, text) {
-  // If we don't have the original message to reply to, add the location so
-  // the group still knows which call this is about.
-  if (!call.waMessageId && call.location) text += '\n' + call.location;
+  // If we don't have the original message to reply to, add the Call# and
+  // location so the group still knows which call this is about.
+  if (!call.waMessageId) text += '\n' + callLabel(call) + (call.location ? ' · ' + call.location : '');
   var sent = await sendViaWaha(text, call.waMessageId || '');
   if (!sent.ok) {
     console.warn('WAHA update failed:', sent.error);
@@ -3297,9 +3299,7 @@ window.callAddUnit = async function(id, role) {
     return;
   }
 
-  var text = role === 'backup'
-    ? ('*' + unit + '* backing up — ' + callLabel(call))
-    : ('*' + unit + '* responding — ' + callLabel(call));
+  var text = unit + (role === 'backup' ? ' Backing Up' : ' Responding');
 
   setCardBusy(id, true);
   if (input) input.value = ''; // clear before saving — the board redraws on save
@@ -3332,9 +3332,7 @@ window.callClear = async function(id) {
   if (!call) return;
   if (!confirm('Clear ' + callLabel(call) + '?\nA "call cleared" message will be sent to the group.')) return;
 
-  var units = call.units ? Object.keys(call.units).map(function(k) { return call.units[k].unit; }) : [];
-  var text = '*CALL CLEARED* — ' + callLabel(call);
-  if (units.length) text += '\nUnits: ' + units.join(', ');
+  var text = 'Call Cleared';
 
   setCardBusy(id, true);
   try {
@@ -3844,18 +3842,63 @@ function pttStop() {
   btn.addEventListener('pointercancel', function() { pttStop(); });
   btn.addEventListener('contextmenu', function(e) { e.preventDefault(); });
 
-  // Space bar = push-to-talk, unless you're typing in a field
+  // ── Push-to-talk key (Space by default; click the keyboard button to change) ──
+  var pttKey = 'Space';
+  var pickingKey = false;
+  try { pttKey = localStorage.getItem('pttKey') || 'Space'; } catch (e) {}
+
   function typing(t) {
     return t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable);
   }
+  // Keys that don't type anything (F1-F24, Insert, Pause, ` etc.) work even
+  // while your cursor is in a text box. Letter/number/space keys don't.
+  function worksWhileTyping(code) {
+    return /^F\d{1,2}$/.test(code) || ['Backquote', 'Insert', 'Pause', 'ScrollLock', 'PrintScreen',
+      'ContextMenu', 'NumpadEnter', 'NumLock', 'ControlRight', 'AltRight', 'MetaRight'].indexOf(code) !== -1;
+  }
+  function keyName(code) {
+    return code.replace(/^Key/, '').replace(/^Digit/, '').replace(/^Numpad/, 'Numpad ')
+      .replace('Backquote', '` (backtick)').replace('ControlRight', 'Right Ctrl')
+      .replace('AltRight', 'Right Alt/Option').replace('MetaRight', 'Right Cmd');
+  }
+  function updateKeyButton() {
+    var b = document.getElementById('pttKeyBtn');
+    if (!b) return;
+    b.classList.toggle('listening', pickingKey);
+    b.title = pickingKey ? 'Press the key you want to use (Esc to cancel)'
+      : 'Push-to-talk key: ' + keyName(pttKey) + (worksWhileTyping(pttKey) ? ' (works while typing)' : '') + ' \u2014 click to change';
+  }
+
+  window.setPttKey = function() {
+    pickingKey = true;
+    updateKeyButton();
+    showToast('Press the key you want for push-to-talk (Esc to cancel)');
+  };
+
   document.addEventListener('keydown', function(e) {
-    if (e.code !== 'Space' || e.repeat || typing(e.target)) return;
+    if (pickingKey) {
+      e.preventDefault(); e.stopPropagation();
+      pickingKey = false;
+      if (e.code === 'Escape') { updateKeyButton(); showToast('Push-to-talk key unchanged: ' + keyName(pttKey)); return; }
+      if (['Tab', 'Enter', 'Backspace', 'ShiftLeft', 'ShiftRight', 'CapsLock'].indexOf(e.code) !== -1 || !e.code) {
+        updateKeyButton(); showToast('That key can\u2019t be used \u2014 pick another'); return;
+      }
+      pttKey = e.code;
+      try { localStorage.setItem('pttKey', pttKey); } catch (x) {}
+      updateKeyButton();
+      showToast('\u2713 Push-to-talk key: ' + keyName(pttKey) + (worksWhileTyping(pttKey) ? ' (works while typing)' : ''));
+      return;
+    }
+    if (e.code !== pttKey || e.repeat) return;
+    if (typing(e.target) && !worksWhileTyping(pttKey)) return;
     e.preventDefault(); pttStart();
-  });
+  }, true);
   document.addEventListener('keyup', function(e) {
-    if (e.code !== 'Space' || typing(e.target)) return;
+    if (e.code !== pttKey) return;
+    if (typing(e.target) && !worksWhileTyping(pttKey) && ptt.state === 'idle') return;
     e.preventDefault(); pttStop();
-  });
+  }, true);
+  updateKeyButton();
   window.addEventListener('blur', function() { pttStop(); });
 
   // Browsers only allow sound after you've clicked or pressed a key once
