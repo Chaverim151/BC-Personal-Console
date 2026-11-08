@@ -359,13 +359,13 @@ window.isMeaningfullyDifferentPoiName = function(name, address) {
   .unit-chip .role { font-weight: 500; opacity: 0.8; }
   .unit-chip button { background: none; border: none; color: inherit; opacity: 0.55; cursor: pointer; font-size: 15px; line-height: 1; padding: 0 2px; font-family: inherit; }
   .unit-chip button:hover { opacity: 1; }
-  .unit-item { display: inline-flex; align-items: center; gap: 4px; }
   .unit-chip.on-location { background: #1E5E22; color: #fff; border-color: #1E5E22; }
   .unit-chip.on-location .role { opacity: 0.9; }
-  .onloc-btn { border: 1.5px solid #9CCB9F; background: #fff; color: #1E5E22; border-radius: 999px; padding: 3px 9px; font-size: 11.5px; font-weight: 600; cursor: pointer; font-family: inherit; white-space: nowrap; }
-  .onloc-btn:hover { background: #E6F2E6; }
-  .onloc-btn.on { background: transparent; border-color: #C9BFA0; color: #8A7A50; }
-  .onloc-btn.on:hover { background: #F5ECC0; }
+  /* "On location" button inside the unit pill */
+  .unit-chip .onloc-btn { opacity: 1; margin-left: 2px; background: rgba(255,255,255,0.85); border: 1px solid currentColor; border-radius: 999px; padding: 2px 8px; font-size: 11px; font-weight: 700; line-height: 1.3; white-space: nowrap; }
+  .unit-chip .onloc-btn:hover { background: #fff; }
+  .unit-chip.on-location .onloc-btn { background: rgba(255,255,255,0.15); color: #fff; border-color: rgba(255,255,255,0.6); }
+  .unit-chip.on-location .onloc-btn:hover { background: rgba(255,255,255,0.28); }
   .unit-none { font-size: 12px; color: #9A8050; }
   .unit-row { display: grid; grid-template-columns: 1fr auto auto auto; gap: 8px; align-items: center; }
   .unit-row input { padding: 9px 12px; }
@@ -378,6 +378,12 @@ window.isMeaningfullyDifferentPoiName = function(name, address) {
   .unit-btn.observing:hover { background: #4A7BAD; }
   .clear-call-btn { margin-top: 10px; width: 100%; border: 1.5px solid #8B2000; background: transparent; color: #B02800; border-radius: 10px; padding: 10px; font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit; display: flex; align-items: center; justify-content: center; gap: 6px; }
   .clear-call-btn:hover { background: #FFF0EA; }
+  .call-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+  .call-actions .clear-call-btn { margin-top: 0; }
+  .int-call-btn { width: 100%; border: 1.5px solid #2E2A10; background: #0F0E06; color: #C8A532; border-radius: 10px; padding: 10px; font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit; display: flex; align-items: center; justify-content: center; gap: 6px; }
+  .int-call-btn:hover { background: #1C1A08; }
+  .int-call-btn:disabled { opacity: 0.5; cursor: wait; }
+  .call-sent-int { font-size: 11.5px; color: #6B5515; margin-top: 4px; font-weight: 600; }
   .unit-btn:disabled, .clear-call-btn:disabled { opacity: 0.5; cursor: wait; }
 
   /* ── Responsive / Mobile ── */
@@ -2841,9 +2847,11 @@ function buildWA(d) {
 
 function buildInt(d) {
   var lines = [];
+  // From a call card these come saved with the call; from the form, use the form's
+  var locked = d.lockedInside != null ? d.lockedInside : window.lockedInsideNote;
   if (d.urgent) lines.push('*URGENT*');
-  if (window.lockedInsideNote) lines.push('*' + window.lockedInsideNote.toUpperCase() + '*');
-  if (d.urgent || window.lockedInsideNote) lines.push('');
+  if (locked) lines.push('*' + locked.toUpperCase() + '*');
+  if (d.urgent || locked) lines.push('');
   lines.push('New Call (BC)');
   lines.push('');
   if (d.poiName) lines.push(d.poiName);
@@ -2855,7 +2863,7 @@ function buildInt(d) {
   lines.push('Name: ' + d.name);
   lines.push('');
   lines.push('Nature: ' + d.nature);
-  var ezLinesInt = buildEzSpareLines();
+  var ezLinesInt = d.ezLines != null ? d.ezLines : buildEzSpareLines();
   if (ezLinesInt.length) { lines.push(''); ezLinesInt.forEach(function(l){ lines.push(l); }); }
   return lines.join('\n');
 }
@@ -3202,6 +3210,18 @@ async function sendViaWaha(text, replyTo) {
   }
 }
 
+// Interstate does not dispatch in Bergen's primary zone, and only in the
+// secondary zone if Bergen asks — confirm before sending in either case.
+function interstateZoneOk(zone) {
+  if (zone === 'primary') {
+    return confirm('This location is in Bergen\u2019s PRIMARY coverage zone.\nInterstate does not dispatch calls here \u2014 Bergen County Chaverim handles these directly (201-800-4357).\n\nSend to Interstate anyway?');
+  }
+  if (zone === 'secondary') {
+    return confirm('This location is in Bergen\u2019s SECONDARY zone.\nInterstate only dispatches here if Bergen County Chaverim requests it.\n\nContinue?');
+  }
+  return true;
+}
+
 window.dispatchInterstate = async function() {
   var d = getFormData();
   if (!d.urgent) {
@@ -3209,17 +3229,9 @@ window.dispatchInterstate = async function() {
     if (missing.length) { window.showMissingInfoModal(missing, window.dispatchInterstate); return; }
   }
 
-  // Interstate does not dispatch in Bergen's primary zone.
   // (The "outside coverage" case is already flagged automatically the moment
-  // the location resolves, via the shared dispatch-check modal — no need to block here too.)
-  var zone = window.getZone(d.lat, d.lng) || window.currentZone;
-  if (zone === 'primary') {
-    var ok = confirm('This location is in Bergen\u2019s PRIMARY coverage zone.\nInterstate does not dispatch calls here \u2014 Bergen County Chaverim handles these directly (201-800-4357).\n\nSend to Interstate anyway?');
-    if (!ok) return;
-  } else if (zone === 'secondary') {
-    var ok2 = confirm('This location is in Bergen\u2019s SECONDARY zone.\nInterstate only dispatches here if Bergen County Chaverim requests it.\n\nContinue?');
-    if (!ok2) return;
-  }
+  // the location resolves, via the shared dispatch-check modal.)
+  if (!interstateZoneOk(window.getZone(d.lat, d.lng) || window.currentZone)) return;
 
   var msg = buildInt(d);
   showPreview(msg);
@@ -3257,6 +3269,7 @@ async function createActiveCall(d, waMessageId) {
     name: d.name || '',
     urgent: !!d.urgent,
     lockedInside: window.lockedInsideNote || '',
+    ezLines: buildEzSpareLines(),
     lat: d.lat || null,
     lng: d.lng || null,
     waMessageId: waMessageId || '',
@@ -3361,6 +3374,30 @@ window.callRemoveUnit = async function(id, key) {
   catch (e) { showToast('Could not save — check connection'); }
 };
 
+// Sends a call from the board to Interstate (opens WhatsApp to Interstate,
+// same message as the form's "Dispatch to Interstate" button)
+window.callSendInterstate = async function(id) {
+  var call = window._activeCalls[id];
+  if (!call) return;
+  if (call.interstateAt && !confirm(callLabel(call) + ' was already sent to Interstate at ' + formatTime(call.interstateAt) + '.\nSend it again?')) return;
+  if (!interstateZoneOk(window.getZone(call.lat, call.lng))) return;
+
+  var msg = buildInt({
+    urgent: !!call.urgent,
+    lockedInside: call.lockedInside || '',
+    ezLines: Array.isArray(call.ezLines) ? call.ezLines : [],
+    poiName: call.poiName || '',
+    location: call.location || '',
+    lat: call.lat || null,
+    lng: call.lng || null,
+    phone: call.phone || '',
+    name: call.name || '',
+    nature: call.nature || ''
+  });
+  openExternalLink('https://wa.me/18458524357?text=' + encodeURIComponent(msg));
+  try { await update(ref(db, 'activeCalls/' + id), { interstateAt: Date.now() }); } catch (e) {}
+};
+
 window.callClear = async function(id) {
   var call = window._activeCalls[id];
   if (!call) return;
@@ -3419,17 +3456,15 @@ function renderActiveCalls() {
       var status = u.onLocation
         ? 'on location' + (u.onLocationAt ? ' ' + escapeHtml(formatTime(u.onLocationAt)) : '')
         : UNIT_ROLES[r].board;
-      // Unit tag + its own "On location" button (nothing is sent to the group)
-      return '<span class="unit-item">' +
-        '<span class="unit-chip ' + r + (u.onLocation ? ' on-location' : '') + '">' +
-          escapeHtml(u.unit) + ' <span class="role">' + status + '</span>' +
-          '<button type="button" title="Remove" onclick="window.callRemoveUnit(\'' + id + '\',\'' + kk + '\')">&times;</button>' +
-        '</span>' +
-        '<button type="button" class="onloc-btn' + (u.onLocation ? ' on' : '') + '" ' +
+      // Unit pill with its own "On location" button inside (nothing is sent to the group)
+      return '<span class="unit-chip ' + r + (u.onLocation ? ' on-location' : '') + '">' +
+        escapeHtml(u.unit) + ' <span class="role">' + status + '</span>' +
+        '<button type="button" class="onloc-btn" ' +
           'title="' + (u.onLocation ? 'Undo on location' : 'Mark ' + escapeHtml(u.unit) + ' on location (nothing is sent)') + '" ' +
           'onclick="window.callToggleOnLocation(\'' + id + '\',\'' + kk + '\')">' +
           (u.onLocation ? 'Undo' : 'On location') +
         '</button>' +
+        '<button type="button" title="Remove" onclick="window.callRemoveUnit(\'' + id + '\',\'' + kk + '\')">&times;</button>' +
       '</span>';
     }).join('') : '<span class="unit-none">No units yet</span>';
 
@@ -3453,7 +3488,11 @@ function renderActiveCalls() {
           '<button type="button" class="unit-btn backup" onclick="window.callAddUnit(\'' + id + '\',\'backup\')">Backing up</button>' +
           '<button type="button" class="unit-btn observing" onclick="window.callAddUnit(\'' + id + '\',\'observing\')">Observing</button>' +
         '</div>' +
-        '<button type="button" class="clear-call-btn" onclick="window.callClear(\'' + id + '\')"><i class="ti ti-circle-check"></i> Clear call</button>' +
+        (call.interstateAt ? '<div class="call-sent-int">\u2713 Sent to Interstate ' + escapeHtml(formatTime(call.interstateAt)) + '</div>' : '') +
+        '<div class="call-actions">' +
+          '<button type="button" class="int-call-btn" onclick="window.callSendInterstate(\'' + id + '\')"><i class="ti ti-car"></i> Send to Interstate</button>' +
+          '<button type="button" class="clear-call-btn" onclick="window.callClear(\'' + id + '\')"><i class="ti ti-circle-check"></i> Clear call</button>' +
+        '</div>' +
       '</div>' +
     '</div>';
   }).join('');
