@@ -1091,6 +1091,20 @@ function toE164(phoneStr) {
   return null;
 }
 
+// When the API route fails, say why and ask before opening the i911 website
+function i911Failed(why) {
+  console.warn('i911:', why);
+  window.closeI911Socket();
+  var btn = document.getElementById('i911RequestBtn');
+  if (btn) { btn.style.opacity = ''; btn.style.pointerEvents = ''; }
+  showToast('i911: ' + why);
+  setTimeout(function() {
+    if (confirm('i911 request failed:\n' + why + '\n\nOpen i911.com to request the location by hand?')) {
+      openExternalLink('https://www.i911.com');
+    }
+  }, 50);
+}
+
 window.requestI911Location = async function() {
   var phoneInput = document.getElementById('phone');
   var e164 = toE164(phoneInput ? phoneInput.value : '');
@@ -1115,20 +1129,14 @@ window.requestI911Location = async function() {
     });
     data = await resp.json().catch(function() { return null; });
   } catch (e) {
-    if (btn) { btn.style.opacity = ''; btn.style.pointerEvents = ''; }
-    showToast('Could not reach i911 relay \u2014 opening i911.com instead');
-    console.warn('i911 request error:', e);
-    openExternalLink('https://www.i911.com');
+    i911Failed('could not reach the relay (is the bc-waha Worker deployed?)');
     return;
   }
 
   if (btn) { btn.style.opacity = ''; btn.style.pointerEvents = ''; }
 
   if (!resp.ok || !data || !data.webSocketURL) {
-    var errMsg = (data && data.error) ? data.error : ('HTTP ' + resp.status);
-    showToast('i911 request failed (' + errMsg + ') \u2014 opening i911.com instead');
-    console.warn('i911 request failed:', errMsg);
-    openExternalLink('https://www.i911.com');
+    i911Failed((data && data.error) ? data.error : ('HTTP ' + resp.status));
     return;
   }
 
@@ -1136,38 +1144,43 @@ window.requestI911Location = async function() {
   window.connectI911Socket(data.webSocketURL);
 };
 
+// Listens for the caller's location through the bc-waha Worker, which
+// connects to i911's Socket.IO feed for us.
 window.connectI911Socket = function(webSocketURL) {
-  if (typeof io !== 'function') {
-    showToast('Location service unavailable \u2014 opening i911.com instead');
-    openExternalLink('https://www.i911.com');
-    return;
-  }
+  var token = null;
+  try { token = new URL(webSocketURL).searchParams.get('token'); } catch (e) {}
+  if (!token) { i911Failed('i911 sent back no session token'); return; }
 
-  // i911 returns "wss://www.i911.com?token=..." — pass the token as a query
-  // option, the way i911's integration guide does
-  var base = webSocketURL, opts = { transports: ['websocket'] };
+  var ws;
   try {
-    var u = new URL(webSocketURL);
-    var token = u.searchParams.get('token');
-    if (token) { opts.query = { token: token }; base = u.protocol + '//' + u.host; }
-  } catch (e) { /* use the URL as given */ }
-  var socket = io(base, opts);
-  window._i911Socket = socket;
+    ws = new WebSocket(I911_PROXY_BASE.replace(/^http/, 'ws') + '/i911/listen?token=' + encodeURIComponent(token));
+  } catch (e) { i911Failed('could not open the location feed'); return; }
+  window._i911Socket = ws;
+  var gotLocation = false;
 
-  socket.on('connect_error', function(err) {
-    console.warn('i911 socket connect_error:', err && err.message ? err.message : err);
-    showToast('Could not connect to i911 location service \u2014 opening i911.com instead');
-    window.closeI911Socket();
-    openExternalLink('https://www.i911.com');
-  });
-
-  socket.on('location-update', function(payload) {
-    window.handleI911Location(payload);
-  });
+  ws.onmessage = function(ev) {
+    var m; try { m = JSON.parse(ev.data); } catch (e) { return; }
+    if (m.type === 'connected') {
+      console.log('i911 feed connected');
+    } else if (m.type === 'location') {
+      gotLocation = true;
+      window.handleI911Location(m.data);
+    } else if (m.type === 'error') {
+      if (m.error && m.error.indexOf('timed out') === 0) { showToast('No location received from caller (timed out)'); window.closeI911Socket(); }
+      else i911Failed(m.error || 'location feed error');
+    }
+  };
+  ws.onclose = function() {
+    if (window._i911Socket === ws && !gotLocation) {
+      window._i911Socket = null;
+      // Closed without a reason message: treat as a failure
+      if (window._i911TimeoutId) i911Failed('location feed closed unexpectedly');
+    }
+  };
 
   // Give up if the caller never responds to the location-request text.
-  // This is NOT an API failure (the request itself succeeded — the caller
-  // just hasn't tapped the link yet), so it does not redirect to i911.com.
+  // This is NOT an API failure (the caller just hasn't tapped the link),
+  // so it doesn't offer the website.
   window._i911TimeoutId = setTimeout(function() {
     showToast('No location received from caller (timed out)');
     window.closeI911Socket();
@@ -1177,8 +1190,9 @@ window.connectI911Socket = function(webSocketURL) {
 window.closeI911Socket = function() {
   if (window._i911TimeoutId) { clearTimeout(window._i911TimeoutId); window._i911TimeoutId = null; }
   if (window._i911Socket) {
-    try { window._i911Socket.disconnect(); } catch (e) { /* ignore */ }
+    var s = window._i911Socket;
     window._i911Socket = null;
+    try { s.close(); } catch (e) { /* ignore */ }
   }
 };
 
