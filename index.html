@@ -378,7 +378,10 @@ window.isMeaningfullyDifferentPoiName = function(name, address) {
   .unit-btn.observing:hover { background: #4A7BAD; }
   .clear-call-btn { margin-top: 10px; width: 100%; border: 1.5px solid #8B2000; background: transparent; color: #B02800; border-radius: 10px; padding: 10px; font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit; display: flex; align-items: center; justify-content: center; gap: 6px; }
   .clear-call-btn:hover { background: #FFF0EA; }
-  .call-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+  .call-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; margin-top: 10px; }
+  .push-call-btn { width: 100%; border: 1.5px solid #C8A532; background: #C8A532; color: #0F0E06; border-radius: 10px; padding: 10px; font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit; display: flex; align-items: center; justify-content: center; gap: 6px; }
+  .push-call-btn:hover { background: #D8B540; }
+  .push-call-btn:disabled { opacity: 0.5; cursor: wait; }
   .call-actions .clear-call-btn { margin-top: 0; }
   .int-call-btn { width: 100%; border: 1.5px solid #2E2A10; background: #0F0E06; color: #C8A532; border-radius: 10px; padding: 10px; font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit; display: flex; align-items: center; justify-content: center; gap: 6px; }
   .int-call-btn:hover { background: #1C1A08; }
@@ -3419,6 +3422,25 @@ window.callSendInterstate = async function(id) {
   try { await update(ref(db, 'activeCalls/' + id), { interstateAt: Date.now() }); } catch (e) {}
 };
 
+// "Pushes" the call: replies to the original call message asking for units
+var PUSH_CALL_TEXT = 'Any units available to respond';
+
+window.callPush = async function(id) {
+  var call = window._activeCalls[id];
+  if (!call) return;
+  setCardBusy(id, true);
+  try {
+    if (await postCallUpdate(call, PUSH_CALL_TEXT)) {
+      showToast('\u2713 Pushed ' + callLabel(call));
+      try {
+        await update(ref(db, 'activeCalls/' + id), { lastPushAt: Date.now(), pushCount: (call.pushCount || 0) + 1 });
+      } catch (e) {}
+    }
+  } finally {
+    setCardBusy(id, false);
+  }
+};
+
 window.callClear = async function(id) {
   var call = window._activeCalls[id];
   if (!call) return;
@@ -3509,8 +3531,10 @@ function renderActiveCalls() {
           '<button type="button" class="unit-btn backup" onclick="window.callAddUnit(\'' + id + '\',\'backup\')">Backing up</button>' +
           '<button type="button" class="unit-btn observing" onclick="window.callAddUnit(\'' + id + '\',\'observing\')">Observing</button>' +
         '</div>' +
+        (call.lastPushAt ? '<div class="call-sent-int">\u2713 Pushed ' + (call.pushCount > 1 ? call.pushCount + '\u00D7, last ' : '') + escapeHtml(formatTime(call.lastPushAt)) + '</div>' : '') +
         (call.interstateAt ? '<div class="call-sent-int">\u2713 Sent to Interstate ' + escapeHtml(formatTime(call.interstateAt)) + '</div>' : '') +
         '<div class="call-actions">' +
+          '<button type="button" class="push-call-btn" onclick="window.callPush(\'' + id + '\')"><i class="ti ti-speakerphone"></i> Push call</button>' +
           '<button type="button" class="int-call-btn" onclick="window.callSendInterstate(\'' + id + '\')"><i class="ti ti-car"></i> Send to Interstate</button>' +
           '<button type="button" class="clear-call-btn" onclick="window.callClear(\'' + id + '\')"><i class="ti ti-circle-check"></i> Clear call</button>' +
         '</div>' +
