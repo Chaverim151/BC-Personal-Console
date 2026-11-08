@@ -3193,10 +3193,11 @@ async function fillNextCallNumber() {
 // session "Personal_BC_Dispatch" and group 120363264369523011@g.us.
 const WAHA_PROXY_URL = 'https://bc-waha.shmueleidelman-work.workers.dev/send';
 
-async function sendViaWaha(text, replyTo) {
+async function sendViaWaha(text, replyTo, to) {
   try {
     var payload = { text: text };
     if (replyTo) payload.reply_to = replyTo;
+    if (to) payload.to = to;   // 'bc' (default) or 'interstate'
     var resp = await fetch(WAHA_PROXY_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -3222,6 +3223,21 @@ function interstateZoneOk(zone) {
   return true;
 }
 
+// Sends a message to Interstate through WAHA. If WAHA fails, opens WhatsApp
+// with the message filled in instead, so the call still goes out.
+async function sendToInterstate(msg) {
+  showToast('Sending to Interstate...');
+  var sent = await sendViaWaha(msg, '', 'interstate');
+  if (sent.ok) {
+    showToast('\u2713 Sent to Interstate');
+    return true;
+  }
+  console.warn('WAHA Interstate send failed:', sent.error);
+  showToast('WAHA failed (' + sent.error + ') \u2014 opening WhatsApp instead');
+  openExternalLink('https://wa.me/18458524357?text=' + encodeURIComponent(msg));
+  return false;
+}
+
 window.dispatchInterstate = async function() {
   var d = getFormData();
   if (!d.urgent) {
@@ -3235,8 +3251,11 @@ window.dispatchInterstate = async function() {
 
   var msg = buildInt(d);
   showPreview(msg);
+  var btn = document.getElementById('dispatchIntBtn');
+  if (btn) { btn.disabled = true; btn.style.opacity = '0.6'; }
   await saveCallNumber(d.callNum);
-  openExternalLink('https://wa.me/18458524357?text=' + encodeURIComponent(msg));
+  await sendToInterstate(msg);
+  if (btn) { btn.disabled = false; btn.style.opacity = ''; }
 };
 
 // ── Active calls board ──────────────────────────────────────────────
@@ -3374,8 +3393,8 @@ window.callRemoveUnit = async function(id, key) {
   catch (e) { showToast('Could not save — check connection'); }
 };
 
-// Sends a call from the board to Interstate (opens WhatsApp to Interstate,
-// same message as the form's "Dispatch to Interstate" button)
+// Sends a call from the board to Interstate through WAHA (same message as
+// the form's "Dispatch to Interstate" button)
 window.callSendInterstate = async function(id) {
   var call = window._activeCalls[id];
   if (!call) return;
@@ -3394,7 +3413,9 @@ window.callSendInterstate = async function(id) {
     name: call.name || '',
     nature: call.nature || ''
   });
-  openExternalLink('https://wa.me/18458524357?text=' + encodeURIComponent(msg));
+  setCardBusy(id, true);
+  await sendToInterstate(msg);
+  setCardBusy(id, false);
   try { await update(ref(db, 'activeCalls/' + id), { interstateAt: Date.now() }); } catch (e) {}
 };
 
