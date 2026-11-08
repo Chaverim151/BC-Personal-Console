@@ -1452,20 +1452,19 @@ window.fillFromLiveCall = function() {
   }
 };
 
-// Start polling every 5 seconds once page loads
-if (TELZIO_PROXY_URL.indexOf('YOUR-WORKER') === -1) {
-  pollTelzioLiveCalls();
-  telzioInterval = setInterval(pollTelzioLiveCalls, 5000);
+// Start polling every 5 seconds
+function startTelzioPolling() {
+  if (TELZIO_PROXY_URL.indexOf('YOUR-WORKER') === -1 && !telzioInterval) {
+    pollTelzioLiveCalls();
+    telzioInterval = setInterval(pollTelzioLiveCalls, 5000);
+  }
 }
 
 // ── Load all data on startup ──
 async function loadAll() {
   try {
-    // 1. Last call number from Firebase
-    const callSnap = await get(ref(db, 'meta/lastCallNumber'));
-    const lastNum = callSnap.exists() ? callSnap.val() : 1000;
-    document.getElementById('callNum').value = lastNum + 1;
-    document.getElementById('callNum').dataset.auto = lastNum + 1;
+    // 1. Next call number = last Call# in the group + 1 (Firebase as backup)
+    await fillNextCallNumber();
 
     // 2. Colors from Firebase (with defaults)
     const colorsSnap = await get(ref(db, 'colors'));
@@ -3054,6 +3053,16 @@ window.dispatchWhatsApp = async function() {
     var missing = getMissingFields(d, ['callNum', 'location', 'nature', 'phone']);
     if (missing.length) { window.showMissingInfoModal(missing, window.dispatchWhatsApp); return; }
   }
+  // Someone else may have dispatched since this form loaded — re-check the group
+  var callNumEl = document.getElementById('callNum');
+  var mine = parseInt(d.callNum, 10);
+  var groupLast = await getGroupLastCallNumber();
+  if (groupLast != null && !isNaN(mine) && mine <= groupLast) {
+    callNumEl.value = groupLast + 1;
+    d.callNum = String(groupLast + 1);
+    showToast('Call#' + mine + ' was already used \u2014 changed to Call#' + d.callNum);
+  }
+
   var msg = buildWA(d);
   showPreview(msg);
 
@@ -3078,6 +3087,48 @@ window.dispatchWhatsApp = async function() {
     openExternalLink('https://wa.me/?text=' + encodeURIComponent(msg));
   }
 };
+
+// ── Call# from the group: finds the newest dispatch message ("Call#:3883 ...
+// Location: ...") in the BC Dispatch group and returns its number. Returns
+// null if the group can't be reached, so callers can fall back to Firebase.
+const WAHA_LAST_CALL_URL = 'https://bc-waha.shmueleidelman-work.workers.dev/last-call';
+
+async function getGroupLastCallNumber() {
+  try {
+    var resp = await fetch(WAHA_LAST_CALL_URL, { cache: 'no-store' });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    var data = await resp.json();
+    var n = parseInt(data && data.lastCallNumber, 10);
+    return isNaN(n) ? null : n;
+  } catch (e) {
+    console.warn('Could not read last Call# from group:', e);
+    return null;
+  }
+}
+
+// Works out the next Call#: last Call# posted in the group + 1.
+// Falls back to the Firebase counter if the group can't be read.
+async function getNextCallNumber() {
+  var groupLast = await getGroupLastCallNumber();
+  if (groupLast != null) return { next: groupLast + 1, source: 'group' };
+  try {
+    var snap = await get(ref(db, 'meta/lastCallNumber'));
+    return { next: (snap.exists() ? snap.val() : 1000) + 1, source: 'firebase' };
+  } catch (e) {
+    return { next: null, source: 'none' };
+  }
+}
+
+async function fillNextCallNumber() {
+  var el = document.getElementById('callNum');
+  var badge = document.getElementById('callNumBadge');
+  var r = await getNextCallNumber();
+  if (r.next == null) { el.value = ''; el.placeholder = 'Enter manually'; return r; }
+  el.value = r.next;
+  el.dataset.auto = r.next;
+  if (badge) badge.textContent = r.source === 'group' ? 'FROM GROUP' : 'AUTO';
+  return r;
+}
 
 // ── WAHA: sends the dispatch message to the BC Dispatch WhatsApp group ──
 // The page talks to a Cloudflare Worker, which holds the WAHA address + API key
@@ -3332,6 +3383,7 @@ function renderActiveCalls() {
 }
 
 // Live updates — the board refreshes on its own whenever anything changes
+function startBoard() {
 onValue(ref(db, 'activeCalls'), function(snap) {
   window._activeCalls = snap.exists() ? snap.val() : {};
   renderActiveCalls();
@@ -3349,6 +3401,7 @@ onValue(ref(db, 'knownUnits'), function(snap) {
   units.sort();
   dl.innerHTML = units.map(function(u) { return '<option value="' + escapeHtml(u) + '"></option>'; }).join('');
 });
+}
 
 window.verifyLocation = function() {
   var loc = document.getElementById('location').value;
@@ -3400,24 +3453,18 @@ window.clearForm = async function() {
   var vTrim = document.getElementById('vTrim');
   if (vTrim) { vTrim.innerHTML = '<option value="">— Select year, make &amp; model first —</option>'; vTrim.disabled = true; }
 
-  // Bump the call number by 1. The number that was on screen counts as used
-  // (even if the call was cleared without dispatching), so the next one is +1.
+  // Next Call# = last Call# in the group + 1. If the number that was on screen
+  // was never sent, still move past it so it isn't reused.
   var callNumEl = document.getElementById('callNum');
   var onScreen = parseInt(callNumEl.value, 10);
-  try {
-    var result = await runTransaction(ref(db, 'meta/lastCallNumber'), function(cur) {
-      var last = cur || 1000;
-      return isNaN(onScreen) ? last : Math.max(last, onScreen);
-    });
-    callNumEl.value = (result.snapshot.val() || 1000) + 1;
-  } catch(e) {
-    // Offline — still move forward locally
-    callNumEl.value = isNaN(onScreen) ? '' : onScreen + 1;
-  }
+  var r = await fillNextCallNumber();
+  if (!isNaN(onScreen) && (r.next == null || r.next <= onScreen)) callNumEl.value = onScreen + 1;
 };
 
 // ── Init ──
 loadAll();
+startBoard();
+startTelzioPolling();
 </script>
 <script>
 // ── PWA: installability (Android/Chrome "Add to Home Screen") ──
