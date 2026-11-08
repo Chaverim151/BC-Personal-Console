@@ -355,17 +355,26 @@ window.isMeaningfullyDifferentPoiName = function(name, address) {
   .unit-chip { display: inline-flex; align-items: center; gap: 5px; padding: 4px 6px 4px 10px; border-radius: 999px; font-size: 12.5px; font-weight: 600; }
   .unit-chip.responding { background: #E6F2E6; color: #1E5E22; border: 1px solid #9CCB9F; }
   .unit-chip.backup { background: #FFF1D6; color: #8A5A00; border: 1px solid #E8C26E; }
+  .unit-chip.observing { background: #E6EEF7; color: #24476B; border: 1px solid #9DB8D6; }
   .unit-chip .role { font-weight: 500; opacity: 0.8; }
   .unit-chip button { background: none; border: none; color: inherit; opacity: 0.55; cursor: pointer; font-size: 15px; line-height: 1; padding: 0 2px; font-family: inherit; }
   .unit-chip button:hover { opacity: 1; }
+  .unit-chip { cursor: pointer; }
+  .unit-chip:hover { filter: brightness(0.96); }
+  .unit-chip .pin { font-size: 13px; opacity: 0.6; }
+  .unit-chip.on-location { background: #1E5E22; color: #fff; border-color: #1E5E22; }
+  .unit-chip.on-location .role { opacity: 0.9; }
+  .unit-chip.on-location .pin { opacity: 1; }
   .unit-none { font-size: 12px; color: #9A8050; }
-  .unit-row { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: center; }
+  .unit-row { display: grid; grid-template-columns: 1fr auto auto auto; gap: 8px; align-items: center; }
   .unit-row input { padding: 9px 12px; }
   .unit-btn { border: none; border-radius: 9px; padding: 10px 12px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; white-space: nowrap; }
   .unit-btn.assign { background: #2E7D32; color: #fff; }
   .unit-btn.assign:hover { background: #388E3C; }
   .unit-btn.backup { background: #C88A12; color: #fff; }
   .unit-btn.backup:hover { background: #D89A22; }
+  .unit-btn.observing { background: #3D6A99; color: #fff; }
+  .unit-btn.observing:hover { background: #4A7BAD; }
   .clear-call-btn { margin-top: 10px; width: 100%; border: 1.5px solid #8B2000; background: transparent; color: #B02800; border-radius: 10px; padding: 10px; font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit; display: flex; align-items: center; justify-content: center; gap: 6px; }
   .clear-call-btn:hover { background: #FFF0EA; }
   .unit-btn:disabled, .clear-call-btn:disabled { opacity: 0.5; cursor: wait; }
@@ -442,7 +451,8 @@ window.isMeaningfullyDifferentPoiName = function(name, address) {
     .sub-hdr { font-size: 10px; margin: 1rem 0 0.75rem; }
 
     /* Active calls: stack unit buttons under the input */
-    .unit-row { grid-template-columns: 1fr 1fr; }
+    .unit-row { grid-template-columns: 1fr 1fr 1fr; }
+    .unit-btn { padding: 10px 6px; }
     .unit-row input { grid-column: 1 / -1; font-size: 16px; }
 
     /* Clear btn in card header */
@@ -3285,7 +3295,15 @@ function setCardBusy(id, busy) {
   card.querySelectorAll('button, input').forEach(function(el) { el.disabled = busy; });
 }
 
+// What each role is called: in the WhatsApp reply, and on the board
+var UNIT_ROLES = {
+  responding: { reply: 'Responding', board: 'responding' },
+  backup:     { reply: 'Backing Up', board: 'backing up' },
+  observing:  { reply: 'Observing',  board: 'observing' }
+};
+
 window.callAddUnit = async function(id, role) {
+  if (!UNIT_ROLES[role]) role = 'responding';
   var call = window._activeCalls[id];
   if (!call) return;
   var input = document.getElementById('unitInput_' + id);
@@ -3295,11 +3313,11 @@ window.callAddUnit = async function(id, role) {
   var key = fbKey(unit);
   var existing = call.units && call.units[key];
   if (existing && existing.role === role) {
-    showToast(unit + ' is already ' + (role === 'backup' ? 'backing up' : 'on this call'));
+    showToast(unit + ' is already ' + UNIT_ROLES[role].board);
     return;
   }
 
-  var text = unit + (role === 'backup' ? ' Backing Up' : ' Responding');
+  var text = unit + ' ' + UNIT_ROLES[role].reply;
 
   setCardBusy(id, true);
   if (input) input.value = ''; // clear before saving — the board redraws on save
@@ -3308,7 +3326,7 @@ window.callAddUnit = async function(id, role) {
     updates['activeCalls/' + id + '/units/' + key] = { unit: unit, role: role, at: Date.now() };
     updates['knownUnits/' + key] = unit;
     await update(ref(db), updates);
-    if (await postCallUpdate(call, text)) showToast('✓ ' + unit + (role === 'backup' ? ' backing up' : ' responding'));
+    if (await postCallUpdate(call, text)) showToast('✓ ' + unit + ' ' + UNIT_ROLES[role].board);
   } catch (e) {
     console.warn('Could not add unit:', e);
     var again = document.getElementById('unitInput_' + id);
@@ -3319,6 +3337,21 @@ window.callAddUnit = async function(id, role) {
 };
 
 // Removes a unit from the board only (for typos). No WhatsApp message.
+// Marks a unit on location (or undoes it). Board only — nothing is sent to the group.
+window.callToggleOnLocation = async function(id, key) {
+  var call = window._activeCalls[id];
+  if (!call || !call.units || !call.units[key]) return;
+  var u = call.units[key];
+  var on = !u.onLocation;
+  try {
+    var updates = {};
+    updates['activeCalls/' + id + '/units/' + key + '/onLocation'] = on ? true : null;
+    updates['activeCalls/' + id + '/units/' + key + '/onLocationAt'] = on ? Date.now() : null;
+    await update(ref(db), updates);
+    showToast(on ? (u.unit + ' on location') : (u.unit + ' no longer marked on location'));
+  } catch (e) { showToast('Could not save \u2014 check connection'); }
+};
+
 window.callRemoveUnit = async function(id, key) {
   var call = window._activeCalls[id];
   if (!call || !call.units || !call.units[key]) return;
@@ -3380,9 +3413,18 @@ function renderActiveCalls() {
     var id = escapeHtml(call.id);
     var units = call.units ? Object.keys(call.units).map(function(k) {
       var u = call.units[k];
-      return '<span class="unit-chip ' + (u.role === 'backup' ? 'backup' : 'responding') + '">' +
-        escapeHtml(u.unit) + ' <span class="role">' + (u.role === 'backup' ? 'backing up' : 'responding') + '</span>' +
-        '<button type="button" title="Remove" onclick="window.callRemoveUnit(\'' + id + '\',\'' + escapeHtml(k) + '\')">&times;</button></span>';
+      var r = UNIT_ROLES[u.role] ? u.role : 'responding';
+      var kk = escapeHtml(k);
+      var status = u.onLocation
+        ? 'on location' + (u.onLocationAt ? ' ' + escapeHtml(formatTime(u.onLocationAt)) : '')
+        : UNIT_ROLES[r].board;
+      // Tap the tag = on location (or undo). Nothing is sent to the group.
+      return '<span class="unit-chip ' + r + (u.onLocation ? ' on-location' : '') + '" role="button" ' +
+          'title="' + (u.onLocation ? 'Tap to undo on location' : 'Tap to mark on location (nothing is sent)') + '" ' +
+          'onclick="window.callToggleOnLocation(\'' + id + '\',\'' + kk + '\')">' +
+        '<i class="ti ' + (u.onLocation ? 'ti-map-pin-filled' : 'ti-map-pin') + ' pin"></i>' +
+        escapeHtml(u.unit) + ' <span class="role">' + status + '</span>' +
+        '<button type="button" title="Remove" onclick="event.stopPropagation();window.callRemoveUnit(\'' + id + '\',\'' + kk + '\')">&times;</button></span>';
     }).join('') : '<span class="unit-none">No units yet</span>';
 
     return '<div class="call-card' + (call.urgent ? ' urgent' : '') + '" id="callCard_' + id + '">' +
@@ -3403,6 +3445,7 @@ function renderActiveCalls() {
             'onkeydown="if(event.key===\'Enter\'){event.preventDefault();window.callAddUnit(\'' + id + '\',\'responding\');}" />' +
           '<button type="button" class="unit-btn assign" onclick="window.callAddUnit(\'' + id + '\',\'responding\')">Responding</button>' +
           '<button type="button" class="unit-btn backup" onclick="window.callAddUnit(\'' + id + '\',\'backup\')">Backing up</button>' +
+          '<button type="button" class="unit-btn observing" onclick="window.callAddUnit(\'' + id + '\',\'observing\')">Observing</button>' +
         '</div>' +
         '<button type="button" class="clear-call-btn" onclick="window.callClear(\'' + id + '\')"><i class="ti ti-circle-check"></i> Clear call</button>' +
       '</div>' +
