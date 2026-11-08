@@ -1069,10 +1069,10 @@ window.updateZoneBadge = function() {
 };
 
 // ── i911 caller-location request ──
-// Contract (see i911-worker.js): POST {phonenumber:"+1XXXXXXXXXX"} to
-// <I911_PROXY_BASE>/i911 → { webSocketURL } → connect via socket.io and
-// listen for a "location-update" event carrying { latitude, longitude }.
-const I911_PROXY_BASE = 'https://i911.shmueleidelman-work.workers.dev';
+// POST {phonenumber:"+1XXXXXXXXXX"} to <I911_PROXY_BASE>/i911 (the bc-waha
+// Worker holds the i911 API key) → { webSocketURL } → connect via socket.io
+// and listen for "location-update" events carrying { latitude, longitude, accuracy }.
+const I911_PROXY_BASE = 'https://bc-waha.shmueleidelman-work.workers.dev';
 window._i911Socket = null;
 window._i911TimeoutId = null;
 window._i911PendingLatLng = null;
@@ -1143,7 +1143,15 @@ window.connectI911Socket = function(webSocketURL) {
     return;
   }
 
-  var socket = io(webSocketURL, { transports: ['websocket'] });
+  // i911 returns "wss://www.i911.com?token=..." — pass the token as a query
+  // option, the way i911's integration guide does
+  var base = webSocketURL, opts = { transports: ['websocket'] };
+  try {
+    var u = new URL(webSocketURL);
+    var token = u.searchParams.get('token');
+    if (token) { opts.query = { token: token }; base = u.protocol + '//' + u.host; }
+  } catch (e) { /* use the URL as given */ }
+  var socket = io(base, opts);
   window._i911Socket = socket;
 
   socket.on('connect_error', function(err) {
