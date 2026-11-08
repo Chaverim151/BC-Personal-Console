@@ -878,7 +878,8 @@ window.isMeaningfullyDifferentPoiName = function(name, address) {
         <div><strong style="color:#C8A532;">Closest address:</strong> <span id="i911Address"></span></div>
       </div>
       <div class="modal-btns" style="grid-template-columns:1fr;">
-        <button class="modal-btn modal-btn-ignore" onclick="window.useI911Location()">Use This Location</button>
+        <button class="modal-btn modal-btn-ignore" id="i911UseAddrBtn" onclick="window.useI911Location('address')" disabled style="opacity:0.5;">Use Address</button>
+        <button class="modal-btn modal-btn-ignore" onclick="window.useI911Location('coords')" style="margin-top:8px;">Use Coordinates</button>
         <button class="modal-btn modal-btn-no" onclick="window.dismissI911Modal()" style="margin-top:8px;">Dismiss</button>
       </div>
     </div>
@@ -1231,6 +1232,8 @@ window.showI911ResultModal = function(lat, lng, accuracy) {
   var addrEl = document.getElementById('i911Address');
   addrEl.textContent = 'Looking up nearest address...';
 
+  var addrBtn = document.getElementById('i911UseAddrBtn');
+  if (addrBtn) { addrBtn.disabled = true; addrBtn.style.opacity = '0.5'; addrBtn.textContent = 'Use Address (looking up\u2026)'; }
   document.getElementById('i911ResultModal').classList.add('on');
 
   // Google first; if it can't (e.g. Geocoding API not enabled on the key),
@@ -1239,6 +1242,8 @@ window.showI911ResultModal = function(lat, lng, accuracy) {
     if (window._i911PendingLatLng !== pendingRef) return; // modal moved on
     addrEl.textContent = addr;
     window._i911PendingAddress = addr;
+    var ab = document.getElementById('i911UseAddrBtn');
+    if (ab) { ab.disabled = false; ab.style.opacity = ''; ab.textContent = 'Use Address'; }
   }
   var pendingRef = window._i911PendingLatLng;
   var googleStatus = 'not loaded';
@@ -1261,6 +1266,8 @@ window.showI911ResultModal = function(lat, lng, accuracy) {
         if (window._i911PendingLatLng !== pendingRef) return;
         console.warn('Reverse geocode failed. Google status:', googleStatus);
         addrEl.textContent = 'Could not resolve a street address (Google: ' + googleStatus + ')';
+        var ab = document.getElementById('i911UseAddrBtn');
+        if (ab) ab.textContent = 'Use Address (none found)';
       });
   }
 
@@ -1282,19 +1289,22 @@ window.dismissI911Modal = function() {
   window._i911PendingAddress = null;
 };
 
-window.useI911Location = function() {
+// mode: 'address' fills the street address, 'coords' fills "lat, lng".
+// Either way the exact i911 coordinates are kept for the map pin / links.
+window.useI911Location = function(mode) {
   var pending = window._i911PendingLatLng;
   if (!pending) return;
 
   var locEl = document.getElementById('location');
-  var display = window._i911PendingAddress || (pending.lat.toFixed(6) + ', ' + pending.lng.toFixed(6));
+  var coords = pending.lat.toFixed(6) + ', ' + pending.lng.toFixed(6);
+  var display = (mode === 'address' && window._i911PendingAddress) ? window._i911PendingAddress : coords;
   locEl.value = display;
   locEl.dataset.lat = pending.lat;
   locEl.dataset.lng = pending.lng;
   locEl.dataset.name = '';
   window.updateZoneBadge();
   window.dismissI911Modal();
-  showToast('\u2713 Location filled from i911');
+  showToast('\u2713 ' + (display === coords ? 'Coordinates' : 'Address') + ' filled from i911');
 };
 
 // ── EZ Spare fitment lookup (Flat Tire → "No spare, needs EZ spare") ──
