@@ -315,6 +315,18 @@ window.isMeaningfullyDifferentPoiName = function(name, address) {
   .preview-lbl::after { content: ''; flex: 1; height: 1px; background: #2A2810; }
   .preview-txt { font-size: 12.5px; color: #E8D98A; font-family: 'SF Mono','Fira Code',monospace; white-space: pre-wrap; line-height: 1.7; }
 
+  /* ── Zello push-to-talk ── */
+  .ptt-wrap { position: fixed; right: 18px; bottom: calc(18px + env(safe-area-inset-bottom)); z-index: 900; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .ptt-btn { width: 76px; height: 76px; border-radius: 50%; border: 3px solid #C8A532; background: #0F0E06; color: #C8A532; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 6px 20px rgba(0,0,0,0.35); -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; touch-action: none; transition: transform 0.1s, background 0.15s, border-color 0.15s; }
+  .ptt-btn i { font-size: 32px; pointer-events: none; }
+  .ptt-btn.connecting { border-color: #F9A825; color: #F9A825; animation: ptt-pulse 1s infinite; }
+  .ptt-btn.talking { background: #C62828; border-color: #FF5252; color: #fff; transform: scale(1.08); box-shadow: 0 0 0 8px rgba(198,40,40,0.25), 0 6px 20px rgba(0,0,0,0.35); }
+  .ptt-btn.sending { border-color: #4CAF50; color: #4CAF50; }
+  @keyframes ptt-pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(249,168,37,0.5), 0 6px 20px rgba(0,0,0,0.35); } 50% { box-shadow: 0 0 0 10px rgba(249,168,37,0), 0 6px 20px rgba(0,0,0,0.35); } }
+  .ptt-label { background: #0F0E06; color: #C8A532; font-size: 10.5px; font-weight: 700; letter-spacing: 0.5px; padding: 3px 8px; border-radius: 6px; white-space: nowrap; pointer-events: none; }
+  .ptt-label.talking { background: #C62828; color: #fff; }
+  .page { padding-bottom: 7.5rem; }
+
   /* ── Active calls board ── */
   .board { margin-top: 1.75rem; }
   .board-empty { background: #fff; border: 1px dashed #DDD09A; border-radius: 14px; padding: 1.1rem; text-align: center; font-size: 13px; color: #9A8050; }
@@ -430,6 +442,12 @@ window.isMeaningfullyDifferentPoiName = function(name, address) {
 <body>
 
 <div class="toast" id="toast"></div>
+
+<!-- Zello push-to-talk (01 Dispatch) -->
+<div class="ptt-wrap">
+  <div class="ptt-btn" id="pttBtn" role="button" aria-label="Hold to talk on Zello"><i class="ti ti-microphone"></i></div>
+  <div class="ptt-label" id="pttLabel">Hold to talk</div>
+</div>
 
 <div class="header">
   <div class="logo-badge"><img src="https://i.ibb.co/Kc2B52nS/download-1.png" alt="Chaverim Bergen County logo" /></div>
@@ -3402,6 +3420,229 @@ onValue(ref(db, 'knownUnits'), function(snap) {
   dl.innerHTML = units.map(function(u) { return '<option value="' + escapeHtml(u) + '"></option>'; }).join('');
 });
 }
+
+// ── Zello push-to-talk ─────────────────────────────────────────────
+// Hold the button (or the Space bar when not typing) to talk on 01 Dispatch.
+// Mic audio is encoded to Opus in the browser and streamed through the
+// bc-waha Worker, which holds the Zello login.
+const ZELLO_WS_URL = 'wss://bc-waha.shmueleidelman-work.workers.dev/zello';
+const PTT_RATE = 16000;        // Hz — must match the Worker's codec header
+const PTT_FRAME = 960;         // 60 ms at 16 kHz
+const PTT_MAX_QUEUE = 250;     // ~15 s of audio held while connecting
+
+var ptt = { state: 'idle', id: 0 };
+var pttWorkletUrl = null;
+var pttCounter = 0;
+
+function pttSetState(state, label) {
+  ptt.state = state;
+  var btn = document.getElementById('pttBtn');
+  var lbl = document.getElementById('pttLabel');
+  btn.className = 'ptt-btn' + (state === 'idle' ? '' : ' ' + state);
+  lbl.className = 'ptt-label' + (state === 'talking' ? ' talking' : '');
+  lbl.textContent = label || ({ idle: 'Hold to talk', connecting: 'Connecting…', talking: 'ON AIR', sending: 'Sending…' })[state];
+}
+
+function pttGetWorkletUrl() {
+  if (pttWorkletUrl) return pttWorkletUrl;
+  var code =
+    "class PttCapture extends AudioWorkletProcessor {" +
+    "  constructor() { super(); this.buf = new Float32Array(" + PTT_FRAME + "); this.n = 0; }" +
+    "  process(inputs) {" +
+    "    var ch = inputs[0] && inputs[0][0];" +
+    "    if (ch) for (var i = 0; i < ch.length; i++) {" +
+    "      this.buf[this.n++] = ch[i];" +
+    "      if (this.n === this.buf.length) { this.port.postMessage(this.buf.slice(0)); this.n = 0; }" +
+    "    }" +
+    "    return true;" +
+    "  }" +
+    "}" +
+    "registerProcessor('ptt-capture', PttCapture);";
+  pttWorkletUrl = URL.createObjectURL(new Blob([code], { type: 'application/javascript' }));
+  return pttWorkletUrl;
+}
+
+function pttCleanup() {
+  if (ptt.sender) { clearInterval(ptt.sender); ptt.sender = null; }
+  if (ptt.timeout) { clearTimeout(ptt.timeout); ptt.timeout = null; }
+  if (ptt.connectTimer) { clearTimeout(ptt.connectTimer); ptt.connectTimer = null; }
+  pttStopCapture();
+  if (ptt.encoder) { try { if (ptt.encoder.state !== 'closed') ptt.encoder.close(); } catch (e) {} ptt.encoder = null; }
+  if (ptt.ws) {
+    var ws = ptt.ws; ptt.ws = null;
+    setTimeout(function() { try { ws.close(); } catch (e) {} }, 1500);
+  }
+  ptt.queue = [];
+  ptt.streaming = false;
+}
+
+function pttStopCapture() {
+  if (ptt.node) { try { ptt.node.port.onmessage = null; ptt.node.disconnect(); } catch (e) {} ptt.node = null; }
+  if (ptt.mic) { ptt.mic.getTracks().forEach(function(t) { t.stop(); }); ptt.mic = null; }
+  if (ptt.ctx) { try { ptt.ctx.close(); } catch (e) {} ptt.ctx = null; }
+}
+
+function pttFail(msg) {
+  if (ptt.state === 'idle' && !ptt.ws) return;
+  pttCleanup();
+  pttSetState('idle');
+  if (msg) showToast('Zello: ' + msg);
+}
+
+// Sends queued Opus packets to Zello, up to ~2x real time so a backlog
+// (audio recorded while connecting) catches up without flooding the channel.
+function pttPump() {
+  if (!ptt.streaming || !ptt.ws || ptt.ws.readyState !== 1) return;
+  if (ptt.queue.length) ptt.ws.send(ptt.queue.shift());
+  if (!ptt.queue.length && ptt.ending && ptt.captureDone) pttSendStop();
+}
+
+function pttSendStop() {
+  if (ptt.stopSent) return;
+  ptt.stopSent = true;
+  try { ptt.ws.send(JSON.stringify({ cmd: 'stop' })); } catch (e) {}
+  // The Worker answers with "done"; if it doesn't, give up after a few seconds
+  var id = ptt.id;
+  ptt.timeout = setTimeout(function() { if (ptt.id === id) { pttCleanup(); pttSetState('idle'); } }, 4000);
+}
+
+async function pttStart() {
+  if (ptt.state !== 'idle') return;
+  if (!('AudioEncoder' in window) || !window.AudioWorkletNode || !navigator.mediaDevices) {
+    showToast('Push-to-talk needs Chrome or Edge on this device');
+    return;
+  }
+  var id = ++pttCounter;
+  ptt = { id: id, state: 'idle', queue: [], streaming: false, ending: false, captureDone: false, finishing: false, stopSent: false, ts: 0 };
+  pttSetState('connecting');
+
+  // 1. Open the line to Zello right away (in parallel with the mic)
+  try {
+    ptt.ws = new WebSocket(ZELLO_WS_URL);
+  } catch (e) { return pttFail('could not connect'); }
+  ptt.ws.binaryType = 'arraybuffer';
+  var myWs = ptt.ws;
+  myWs.onmessage = function(ev) {
+    if (myWs !== ptt.ws) return;
+    var m; try { m = JSON.parse(ev.data); } catch (e) { return; }
+    if (m.type === 'ready') {
+      myWs.send(JSON.stringify({ cmd: 'start' }));
+    } else if (m.type === 'streaming') {
+      ptt.streaming = true;
+      if (ptt.connectTimer) { clearTimeout(ptt.connectTimer); ptt.connectTimer = null; }
+      ptt.sender = setInterval(pttPump, 30);
+      if (!ptt.ending) pttSetState('talking');
+    } else if (m.type === 'done') {
+      pttCleanup();
+      pttSetState('idle');
+    } else if (m.type === 'error') {
+      pttFail(m.error || 'error');
+    }
+  };
+  myWs.onclose = function() {
+    if (myWs === ptt.ws && ptt.state !== 'idle') pttFail(ptt.stopSent ? null : 'connection closed');
+  };
+  myWs.onerror = function() {
+    if (myWs === ptt.ws) pttFail('could not reach the relay');
+  };
+  // If Zello never answers, don't leave the button stuck
+  ptt.connectTimer = setTimeout(function() { if (ptt.id === id && !ptt.streaming) pttFail('Zello did not answer'); }, 10000);
+
+  // 2. Microphone + Opus encoder
+  try {
+    ptt.mic = await navigator.mediaDevices.getUserMedia({
+      audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+    });
+  } catch (e) {
+    return pttFail('microphone blocked — allow mic access for this site');
+  }
+  if (ptt.id !== id || ptt.state === 'idle') { pttStopCapture(); return; } // failed/ended while asking for the mic
+
+  try {
+    ptt.encoder = new AudioEncoder({
+      output: function(chunk) {
+        var buf = new Uint8Array(chunk.byteLength);
+        chunk.copyTo(buf);
+        if (ptt.queue.length < PTT_MAX_QUEUE) ptt.queue.push(buf.buffer);
+      },
+      error: function(e) { console.warn('Opus encoder error:', e); pttFail('audio encoder error'); }
+    });
+    ptt.encoder.configure({
+      codec: 'opus', sampleRate: PTT_RATE, numberOfChannels: 1, bitrate: 24000,
+      opus: { frameDuration: 60000, application: 'voip' }
+    });
+
+    ptt.ctx = new AudioContext({ sampleRate: PTT_RATE });
+    await ptt.ctx.audioWorklet.addModule(pttGetWorkletUrl());
+    if (ptt.id !== id || ptt.state === 'idle' || !ptt.ctx) return;
+    var src = ptt.ctx.createMediaStreamSource(ptt.mic);
+    ptt.node = new AudioWorkletNode(ptt.ctx, 'ptt-capture');
+    var mute = ptt.ctx.createGain(); mute.gain.value = 0;   // keeps the graph running, no echo
+    src.connect(ptt.node); ptt.node.connect(mute); mute.connect(ptt.ctx.destination);
+    ptt.node.port.onmessage = function(e) {
+      if (!ptt.encoder || ptt.encoder.state !== 'configured') return;
+      var frames = e.data;
+      var ad = new AudioData({ format: 'f32', sampleRate: PTT_RATE, numberOfFrames: frames.length, numberOfChannels: 1, timestamp: ptt.ts, data: frames });
+      ptt.ts += Math.round(frames.length * 1e6 / PTT_RATE);
+      ptt.encoder.encode(ad);
+      ad.close();
+    };
+  } catch (e) {
+    console.warn('PTT audio setup failed:', e);
+    return pttFail('could not start the microphone');
+  }
+
+  // Released while we were still setting up
+  if (ptt.ending) pttFinishCapture();
+}
+
+async function pttFinishCapture() {
+  if (ptt.finishing) return;
+  ptt.finishing = true;
+  pttStopCapture();
+  if (ptt.encoder && ptt.encoder.state === 'configured') {
+    try { await ptt.encoder.flush(); } catch (e) {}
+  }
+  ptt.captureDone = true;
+  if (ptt.streaming) {
+    pttSetState('sending');
+    if (!ptt.queue.length) pttSendStop();
+  } else {
+    pttSetState('sending');
+    // Still connecting — audio is queued and goes out once Zello is ready
+  }
+}
+
+function pttStop() {
+  if (ptt.state === 'idle' || ptt.ending) return;
+  ptt.ending = true;
+  // If the mic is already running, wrap up now; otherwise pttStart wraps up
+  // as soon as the mic is ready (see the end of pttStart).
+  if (ptt.node) pttFinishCapture();
+}
+
+(function setupPttButton() {
+  var btn = document.getElementById('pttBtn');
+  if (!btn) return;
+  btn.addEventListener('pointerdown', function(e) { e.preventDefault(); try { btn.setPointerCapture(e.pointerId); } catch (x) {} pttStart(); });
+  btn.addEventListener('pointerup', function() { pttStop(); });
+  btn.addEventListener('pointercancel', function() { pttStop(); });
+  btn.addEventListener('contextmenu', function(e) { e.preventDefault(); });
+
+  // Space bar = push-to-talk, unless you're typing in a field
+  function typing(t) {
+    return t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable);
+  }
+  document.addEventListener('keydown', function(e) {
+    if (e.code !== 'Space' || e.repeat || typing(e.target)) return;
+    e.preventDefault(); pttStart();
+  });
+  document.addEventListener('keyup', function(e) {
+    if (e.code !== 'Space' || typing(e.target)) return;
+    e.preventDefault(); pttStop();
+  });
+  window.addEventListener('blur', function() { pttStop(); });
+})();
 
 window.verifyLocation = function() {
   var loc = document.getElementById('location').value;
