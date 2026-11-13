@@ -386,6 +386,21 @@ window.isMeaningfullyDifferentPoiName = function(name, address) {
   .keyup-btns button:disabled { opacity: 0.5; cursor: wait; }
   .keyup-on { font-size: 11.5px; color: #9A8050; margin-bottom: 6px; }
 
+  /* ── Equipment for the call ── */
+  .need-equip { background: #FDFBF0; border: 1px solid #E8D98A; border-radius: 12px; padding: 0.7rem 0.85rem; margin: 0.6rem 0 0.2rem; }
+  .call-card .need-equip { background: #fff; margin: 8px 0 4px; }
+  .ne-title { font-size: 11.5px; font-weight: 700; color: #8A6A10; text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 6px; display: flex; align-items: center; gap: 5px; }
+  .ne-title .ne-time { margin-left: auto; font-weight: 600; text-transform: none; letter-spacing: 0; color: #B0A070; }
+  .ne-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; padding: 4px 0; border-top: 1px dashed #EFE3B5; font-size: 13px; }
+  .ne-row:first-of-type { border-top: none; }
+  .ne-loc { font-weight: 700; color: #1A1400; }
+  .ne-dist { font-size: 11.5px; font-weight: 700; color: #fff; background: #6B5515; border-radius: 6px; padding: 1px 6px; }
+  .ne-row.closest .ne-dist { background: #2E7D32; }
+  .ne-counts { color: #3A3010; }
+  .ne-counts b { color: #1E5E22; }
+  .ne-none { font-size: 12.5px; color: #B02800; font-weight: 600; padding-top: 4px; }
+  .ne-note { font-size: 11px; color: #9A8050; margin-top: 4px; }
+
   /* ── Active calls board ── */
   .board { margin-top: 1.75rem; }
   .board-empty { background: #fff; border: 1px dashed #DDD09A; border-radius: 14px; padding: 1.1rem; text-align: center; font-size: 13px; color: #9A8050; }
@@ -685,6 +700,9 @@ window.isMeaningfullyDifferentPoiName = function(name, address) {
         </select>
       </div>
 
+      <!-- Equipment for this call type (only shows for calls that need equipment) -->
+      <div id="formEquip" style="display:none;"></div>
+
       <!-- Custom nature field (shown when "Other" selected) -->
       <div class="ac-qty" id="customNatureWrap">
         <div class="field">
@@ -854,21 +872,6 @@ window.isMeaningfullyDifferentPoiName = function(name, address) {
     <datalist id="knownUnitsList"></datalist>
   </div>
 
-  <!-- Equipment (COBC Equipment API, read-only) -->
-  <div class="board">
-    <div class="section-row">
-      <div class="dot"></div>
-      <div class="section-lbl">Equipment</div>
-      <div class="equip-meta"><span id="equipUpdated"></span>
-        <button type="button" class="equip-refresh" onclick="window.loadEquipment(true)" title="Refresh now"><i class="ti ti-refresh"></i></button>
-      </div>
-    </div>
-    <div class="equip-box">
-      <div class="equip-filters" id="equipFilters"></div>
-      <div class="equip-search"><input type="text" id="equipSearch" placeholder="Search equipment (e.g. EZ Spare, generator, trailer)..." autocomplete="off" /></div>
-      <div id="equipList"><div class="equip-empty">Loading equipment...</div></div>
-    </div>
-  </div>
 </div>
 
 <!-- Locked inside modal -->
@@ -1070,6 +1073,7 @@ window.getOtherChapterInfo = function(lat, lng) {
 };
 
 window.updateZoneBadge = function() {
+  if (window.renderFormEquip) window.renderFormEquip(); // re-sort equipment by distance
   var locEl = document.getElementById('location');
   var badge = document.getElementById('zoneBadge');
   var text = document.getElementById('zoneBadgeText');
@@ -2732,6 +2736,7 @@ var QTY_NATURES = { heater: 'Heater units', ac: 'AC units' };
 
 window.onNatureChange = function() {
   var val = document.getElementById('natureType').value;
+  if (window.renderFormEquip) window.renderFormEquip();
   var isVeh = VEHICLE_NATURES.indexOf(val) !== -1;
 
   document.getElementById('vehicleFields').classList.toggle('on', isVeh);
@@ -3488,6 +3493,7 @@ async function createActiveCall(d, waMessageId) {
     location: d.location || '',
     poiName: d.poiName || '',
     nature: d.nature || '',
+    natureKey: (document.getElementById('natureType') || {}).value || '',
     phone: d.phone || '',
     name: d.name || '',
     urgent: !!d.urgent,
@@ -3721,6 +3727,7 @@ function renderActiveCalls() {
       '<div class="call-card-body">' +
         (call.lockedInside ? '<div class="call-line" style="color:#B02800;font-weight:700;">' + escapeHtml(call.lockedInside.toUpperCase()) + '</div>' : '') +
         '<div class="call-line"><b>Nature:</b> ' + escapeHtml(call.nature || '—') + '</div>' +
+        neededEquipHtml(callNatureKey(call), call.lat, call.lng) +
         '<div class="call-line"><b>Location:</b> ' + escapeHtml((call.poiName ? call.poiName + ' — ' : '') + (call.location || '—')) + '</div>' +
         ((call.name || call.phone) ? '<div class="call-line"><b>Caller:</b> ' + escapeHtml([call.name, call.phone].filter(Boolean).join(' · ')) + '</div>' : '') +
         (call.waMessageId ? '' : '<div class="call-noreply">Updates for this call will be sent as new messages (no original message to reply to).</div>') +
@@ -4251,111 +4258,214 @@ function pttStop() {
   zelloConnect();
 })();
 
-// ── Equipment (COBC) ────────────────────────────────────────────────
-// Read-only list of Bergen's equipment through the bc-waha Worker (which
-// holds the COBC key). Refreshes once a minute — COBC's data updates every 60 s.
+// ── Equipment for the call (COBC) ───────────────────────────────────
+// Only shown when the call type needs equipment: e.g. a Flood shows where the
+// Fans, Pumps and Shop Vacs are; a Flat Tire shows EZ Spares; a Lockout shows
+// nothing. Counts only items that are IN and in OK condition, nearest location
+// first. Data comes from the bc-waha Worker (which holds the COBC key),
+// refreshed once a minute while something on screen needs it.
 const EQUIP_URL = 'https://bc-waha.shmueleidelman-work.workers.dev/equipment?action=items';
-var equip = { items: [], filter: 'all', search: '', open: {}, loadedAt: 0, error: '' };
+const EQUIP_FOR_NATURE = {
+  flood:          ['Fans', 'Pumps', 'Shop Vacs'],
+  heater:         ['Heaters'],
+  ac:             ['AC Units'],
+  cut_tree:       ['Chainsaws'],
+  cut_lock:       ['Wire Cutter'],
+  flat_tire:      ['EZ Spares'],
+  missing_person: ['Light Towers']
+};
+// For calls saved before the nature key was stored, match the label instead
+const NATURE_LABEL_KEYS = [
+  ['Flat Tire', 'flat_tire'], ['Flood', 'flood'], ['Heater Request', 'heater'], ['AC Request', 'ac'],
+  ['Cut a Tree', 'cut_tree'], ['Cut a Lock', 'cut_lock'], ['Missing Person', 'missing_person']
+];
+// Where each storage location is (from COBC). Names that are street addresses
+// are looked up automatically and remembered on this device.
+var STORAGE_COORDS = {
+  'walraven garage': { lat: 40.900893, lng: -74.003124 },
+  'tvac trailer':    { lat: 40.890120, lng: -74.018241 }
+};
+var equip = { items: [], loadedAt: 0, loading: false, error: '' };
+var storageLookups = {};
 
-function equipMatches(it) {
-  if (equip.filter === 'out' && it.status !== 'OUT') return false;
-  if (equip.filter === 'damaged' && it.condition !== 'Damaged') return false;
-  if (equip.filter === 'missing' && it.condition !== 'Missing') return false;
-  if (equip.search) {
-    var hay = (it.name + ' ' + it.category + ' ' + it.homeLocation).toLowerCase();
-    var words = equip.search.toLowerCase().split(/\s+/).filter(Boolean);
-    for (var i = 0; i < words.length; i++) {
-      // "spares" should still find "EZ Spare"
-      var w = words[i].replace(/s$/, '');
-      if (hay.indexOf(w) === -1) return false;
+function callNatureKey(call) {
+  if (call.natureKey) return call.natureKey;
+  var n = String(call.nature || '');
+  for (var i = 0; i < NATURE_LABEL_KEYS.length; i++) if (n.indexOf(NATURE_LABEL_KEYS[i][0]) === 0) return NATURE_LABEL_KEYS[i][1];
+  return '';
+}
+
+function equipNeeded() {
+  var f = (document.getElementById('natureType') || {}).value;
+  if (EQUIP_FOR_NATURE[f]) return true;
+  return Object.keys(window._activeCalls || {}).some(function(k) { return !!EQUIP_FOR_NATURE[callNatureKey(window._activeCalls[k])]; });
+}
+
+function storageCoords(loc) {
+  var key = String(loc).toLowerCase();
+  if (STORAGE_COORDS[key]) return STORAGE_COORDS[key];
+  // Looks like a street address ("243 Broad Avenue, Englewood")? Look it up once.
+  if (/^\d+\s+\S/.test(loc) && !storageLookups[key]) {
+    storageLookups[key] = true;
+    try {
+      var cached = JSON.parse(localStorage.getItem('storageCoords:' + key) || 'null');
+      if (cached && cached.lat) { STORAGE_COORDS[key] = cached; return cached; }
+    } catch (e) {}
+    var addr = loc + (/\bNJ\b/i.test(loc) ? '' : ', NJ');
+    var done = function(c) {
+      if (!c) return;
+      STORAGE_COORDS[key] = c;
+      try { localStorage.setItem('storageCoords:' + key, JSON.stringify(c)); } catch (e) {}
+      window.renderFormEquip();
+      if (typeof renderActiveCalls === 'function') renderActiveCalls();
+    };
+    if (window.google && google.maps && google.maps.Geocoder) {
+      new google.maps.Geocoder().geocode({ address: addr }, function(res, status) {
+        if (status === 'OK' && res && res[0]) done({ lat: res[0].geometry.location.lat(), lng: res[0].geometry.location.lng() });
+        else storageLookups[key] = false; // try again later
+      });
+    } else {
+      storageLookups[key] = false; // Maps not loaded yet — try again next render
     }
   }
-  return true;
+  return null;
 }
 
-function renderEquipment() {
-  var listEl = document.getElementById('equipList');
-  var filtersEl = document.getElementById('equipFilters');
-  if (!listEl || !filtersEl) return;
-  var items = equip.items;
+function milesBetween(a, b) {
+  var R = 3958.8, toRad = Math.PI / 180;
+  var dLat = (b.lat - a.lat) * toRad, dLng = (b.lng - a.lng) * toRad;
+  var h = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(a.lat * toRad) * Math.cos(b.lat * toRad) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
 
-  // Totals (filter chips)
-  var t = { all: items.length, out: 0, damaged: 0, missing: 0, inn: 0 };
-  items.forEach(function(it) {
-    if (it.status === 'IN') t.inn++;
-    if (it.status === 'OUT') t.out++;
-    if (it.condition === 'Damaged') t.damaged++;
-    if (it.condition === 'Missing') t.missing++;
-  });
-  function chip(key, cls, label, n) {
-    return '<button type="button" class="equip-filter ' + cls + (equip.filter === key ? ' on' : '') + '" onclick="window.setEquipFilter(\'' + key + '\')"><b>' + n + '</b> ' + label + '</button>';
-  }
-  filtersEl.innerHTML = items.length
-    ? chip('all', '', 'items · ' + t.inn + ' in', t.all) + chip('out', 'out', 'out', t.out) +
-      chip('damaged', 'dmg', 'damaged', t.damaged) + chip('missing', 'mis', 'missing', t.missing)
-    : '';
+// ── Google drive times from the call to each storage location ──
+// One Distance Matrix request per call location (cached), then re-render.
+var driveCache = {};      // "lat,lng" -> { 'tvac trailer': {mins, miles}, ... }
+var drivePending = {};
+var driveFailedAt = {};   // "lat,lng" -> time Google last refused (wait 5 min before retrying)
+var driveError = '';
 
-  if (!items.length) {
-    listEl.innerHTML = '<div class="equip-empty">' + escapeHtml(equip.error ? 'Could not load equipment — ' + equip.error : 'Loading equipment...') + '</div>';
-    return;
-  }
+function driveKey(pt) { return pt.lat.toFixed(4) + ',' + pt.lng.toFixed(4); }
 
-  // Group: location → category → items
-  var groups = {}, locOrder = [];
-  items.forEach(function(it) {
-    var loc = it.homeLocation || 'No location';
-    if (!groups[loc]) { groups[loc] = { cats: {}, total: 0, inn: 0, shown: 0 }; locOrder.push(loc); }
-    var g = groups[loc];
-    g.total++; if (it.status === 'IN') g.inn++;
-    var cat = it.category || 'Other';
-    if (!g.cats[cat]) g.cats[cat] = { all: [], shown: [] };
-    g.cats[cat].all.push(it);
-    if (equipMatches(it)) { g.cats[cat].shown.push(it); g.shown++; }
-  });
-  locOrder.sort(function(a, b) { return a.localeCompare(b); });
-
-  var filtering = equip.filter !== 'all' || !!equip.search;
-  var html = '';
-  locOrder.forEach(function(loc) {
-    var g = groups[loc];
-    if (filtering && !g.shown) return;
-    var isOpen = filtering || equip.open[loc];
-    html += '<details class="equip-loc"' + (isOpen ? ' open' : '') + ' ontoggle="window.equipToggled(this, ' + escapeHtml(JSON.stringify(loc)) + ')">' +
-      '<summary><i class="ti ti-chevron-right"></i><i class="ti ti-map-pin"></i>' + escapeHtml(loc) +
-      '<span class="equip-count">' + (filtering ? g.shown + ' match' + (g.shown === 1 ? '' : 'es') + ' · ' : '') + g.inn + '/' + g.total + ' in</span></summary>';
-    Object.keys(g.cats).sort().forEach(function(cat) {
-      var c = g.cats[cat];
-      if (filtering && !c.shown.length) return;
-      var catIn = c.all.filter(function(it) { return it.status === 'IN'; }).length;
-      var list = (filtering ? c.shown : c.all).slice().sort(function(a, b) {
-        return String(a.name).localeCompare(String(b.name), 'en', { numeric: true });
+function requestDriveTimes(callPt, locNames) {
+  if (!(window.google && google.maps && google.maps.DistanceMatrixService)) return;
+  var k = driveKey(callPt);
+  if (driveFailedAt[k] && Date.now() - driveFailedAt[k] < 5 * 60 * 1000) return;
+  var have = driveCache[k] || {};
+  var todo = locNames.filter(function(n) { return !have[n.toLowerCase()] && storageCoords(n); });
+  if (!todo.length || drivePending[k + '|' + todo.join('|')]) return;
+  var pendKey = k + '|' + todo.join('|');
+  drivePending[pendKey] = true;
+  try {
+    new google.maps.DistanceMatrixService().getDistanceMatrix({
+      origins: todo.map(function(n) { var c = storageCoords(n); return new google.maps.LatLng(c.lat, c.lng); }),
+      destinations: [new google.maps.LatLng(callPt.lat, callPt.lng)],
+      travelMode: 'DRIVING',
+      unitSystem: google.maps.UnitSystem.IMPERIAL
+    }, function(res, status) {
+      delete drivePending[pendKey];
+      if (status !== 'OK' || !res) {
+        driveError = status || 'error';
+        driveFailedAt[k] = Date.now();
+        console.warn('Google drive times unavailable:', driveError);
+        return;
+      }
+      driveError = '';
+      var cache = driveCache[k] = driveCache[k] || {};
+      todo.forEach(function(n, i) {
+        var el = res.rows[i] && res.rows[i].elements[0];
+        if (el && el.status === 'OK') {
+          cache[n.toLowerCase()] = { mins: Math.max(1, Math.round(el.duration.value / 60)), miles: el.distance.value / 1609.344 };
+        }
       });
-      html += '<div class="equip-cat"><div class="equip-cat-name">' + escapeHtml(cat) + ' <span>' + catIn + '/' + c.all.length + ' in</span></div><div class="equip-items">' +
-        list.map(function(it) {
-          var st = it.status === 'IN' ? 'in' : it.status === 'OUT' ? 'out' : 'unknown';
-          var cond = it.condition === 'Damaged' ? ' damaged' : it.condition === 'Missing' ? ' missing' : '';
-          var tag = it.status === 'OUT' ? (it.outType ? 'OUT · ' + it.outType : 'OUT') : it.status === 'IN' ? '' : '?';
-          if (cond) tag = (tag ? tag + ' · ' : '') + it.condition.toUpperCase();
-          var tip = it.name + ' — ' + it.status + (it.outType ? ' (' + it.outType + ')' : '') + ', ' + it.condition + (it.lastUpdated ? ', updated ' + it.lastUpdated : '');
-          return '<span class="equip-item ' + st + cond + '" title="' + escapeHtml(tip) + '">' + escapeHtml(it.name) + (tag ? ' <small>' + escapeHtml(tag) + '</small>' : '') + '</span>';
-        }).join('') + '</div></div>';
+      window.renderFormEquip();
+      if (typeof renderActiveCalls === 'function') renderActiveCalls();
     });
-    html += '</details>';
-  });
-  listEl.innerHTML = html || '<div class="equip-empty">No equipment matches</div>';
+  } catch (e) {
+    delete drivePending[pendKey];
+    driveError = e.message || 'error';
+  }
 }
 
-window.equipToggled = function(el, loc) {
-  if (equip.filter === 'all' && !equip.search) equip.open[loc] = el.open;
-};
-window.setEquipFilter = function(f) {
-  equip.filter = (equip.filter === f && f !== 'all') ? 'all' : f;
-  renderEquipment();
+// HTML box listing where the needed equipment is available ('' if none needed)
+function neededEquipHtml(natureKey, lat, lng) {
+  var cats = EQUIP_FOR_NATURE[natureKey];
+  if (!cats) return '';
+  var title = '<div class="ne-title"><i class="ti ti-tool"></i> Available equipment' +
+    (equip.loadedAt ? '<span class="ne-time">as of ' + escapeHtml(formatTime(equip.loadedAt)) + '</span>' : '') + '</div>';
+  if (!equip.loadedAt) {
+    return '<div class="need-equip">' + title + '<div class="ne-note">' +
+      (equip.error ? 'Could not load equipment — ' + escapeHtml(equip.error) : 'Checking equipment…') + '</div></div>';
+  }
+  var callPt = (lat != null && lng != null && lat !== '' && lng !== '' && !isNaN(parseFloat(lat))) ? { lat: parseFloat(lat), lng: parseFloat(lng) } : null;
+  var lowerCats = cats.map(function(c) { return c.toLowerCase(); });
+  var byLoc = {}, totals = {};
+  cats.forEach(function(c) { totals[c] = 0; });
+  equip.items.forEach(function(it) {
+    var ci = lowerCats.indexOf(String(it.category || '').toLowerCase());
+    if (ci === -1 || it.status !== 'IN' || it.condition !== 'OK') return;
+    var loc = it.homeLocation || 'No location';
+    if (!byLoc[loc]) byLoc[loc] = { total: 0, counts: {}, miles: null };
+    byLoc[loc].counts[cats[ci]] = (byLoc[loc].counts[cats[ci]] || 0) + 1;
+    byLoc[loc].total++;
+    totals[cats[ci]]++;
+  });
+  var locs = Object.keys(byLoc);
+  var drive = callPt ? (driveCache[driveKey(callPt)] || {}) : {};
+  if (callPt) requestDriveTimes(callPt, locs);
+  locs.forEach(function(loc) {
+    var c = storageCoords(loc);
+    if (!c || !callPt) return;
+    var d = drive[loc.toLowerCase()];
+    if (d) { byLoc[loc].mins = d.mins; byLoc[loc].miles = d.miles; }
+    else byLoc[loc].miles = milesBetween(callPt, c);   // straight line until Google answers
+  });
+  // Fastest drive first; then straight-line; unknown distance last
+  function rank(L) { return L.mins != null ? L.mins : (L.miles != null ? 1000 + L.miles : null); }
+  locs.sort(function(a, b) {
+    var ra = rank(byLoc[a]), rb = rank(byLoc[b]);
+    if (ra != null && rb != null) return ra - rb;
+    if (ra != null) return -1;
+    if (rb != null) return 1;
+    return byLoc[b].total - byLoc[a].total || a.localeCompare(b);
+  });
+  var rows = locs.map(function(loc, i) {
+    var L = byLoc[loc];
+    var parts = cats.filter(function(c) { return L.counts[c]; })
+      .map(function(c) { return '<b>' + L.counts[c] + '</b> ' + escapeHtml(c); });
+    var mi = L.miles != null ? (L.miles < 10 ? L.miles.toFixed(1) : Math.round(L.miles)) + ' mi' : '';
+    var dist = L.mins != null ? '<span class="ne-dist" title="Google driving time">' + L.mins + ' min \u00B7 ' + mi + '</span>'
+      : (mi ? '<span class="ne-dist" title="Straight-line distance">' + mi + '</span>' : '');
+    return '<div class="ne-row' + (i === 0 && L.miles != null ? ' closest' : '') + '">' + dist +
+      '<span class="ne-loc">' + escapeHtml(loc) + '</span><span class="ne-counts">' + parts.join(' · ') + '</span></div>';
+  }).join('');
+  var missing = cats.filter(function(c) { return !totals[c]; });
+  var none = missing.length ? '<div class="ne-none">None available: ' + missing.map(escapeHtml).join(', ') + '</div>' : '';
+  var notes = [];
+  if (!callPt && locs.length > 1) notes.push('Enter the location to sort by drive time.');
+  else if (callPt && driveError && !locs.some(function(l) { return byLoc[l].mins != null; })) {
+    notes.push('Drive times unavailable (Google: ' + escapeHtml(driveError) + ') \u2014 showing straight-line miles.');
+  }
+  if (natureKey === 'flat_tire') notes.push('Showing all EZ Spares for now — size matching to the vehicle is coming.');
+  return '<div class="need-equip">' + title + rows + none +
+    (notes.length ? '<div class="ne-note">' + notes.join(' ') + '</div>' : '') + '</div>';
+}
+
+window.renderFormEquip = function() {
+  var box = document.getElementById('formEquip');
+  if (!box) return;
+  var key = (document.getElementById('natureType') || {}).value;
+  var locEl = document.getElementById('location') || { dataset: {} };
+  var html = neededEquipHtml(key, locEl.dataset.lat, locEl.dataset.lng);
+  box.innerHTML = html;
+  box.style.display = html ? '' : 'none';
+  if (html && Date.now() - equip.loadedAt > 60000) window.loadEquipment();
 };
 
-window.loadEquipment = async function(manual) {
-  var upd = document.getElementById('equipUpdated');
-  if (manual && upd) upd.textContent = 'Refreshing…';
+window.loadEquipment = async function() {
+  if (equip.loading) return;
+  equip.loading = true;
   try {
     var r = await fetch(EQUIP_URL, { cache: 'no-store' });
     var data = await r.json().catch(function() { return null; });
@@ -4363,25 +4473,25 @@ window.loadEquipment = async function(manual) {
     equip.items = Array.isArray(data.items) ? data.items : [];
     equip.error = '';
     equip.loadedAt = Date.now();
-    if (upd) upd.textContent = 'Updated ' + formatTime(data.generatedAt ? Date.parse(data.generatedAt) : Date.now());
   } catch (e) {
     console.warn('Equipment load failed:', e);
     equip.error = e.message || 'error';
-    if (upd) upd.textContent = equip.items.length ? 'Update failed — showing last list' : '';
-    if (manual) showToast('Equipment: ' + equip.error);
   }
-  renderEquipment();
+  equip.loading = false;
+  window.renderFormEquip();
+  if (typeof renderActiveCalls === 'function') renderActiveCalls();
 };
 
 (function setupEquipment() {
-  var search = document.getElementById('equipSearch');
-  if (search) search.addEventListener('input', function() { equip.search = search.value.trim(); renderEquipment(); });
-  window.loadEquipment(false);
-  // Once a minute while the page is visible (COBC asks for no more than that)
-  setInterval(function() { if (!document.hidden) window.loadEquipment(false); }, 60000);
+  // Check once a minute (COBC's limit) — only fetch when a call on screen needs equipment
+  setInterval(function() {
+    if (!document.hidden && equipNeeded() && Date.now() - equip.loadedAt > 55000) window.loadEquipment();
+  }, 60000);
   document.addEventListener('visibilitychange', function() {
-    if (!document.hidden && Date.now() - equip.loadedAt > 60000) window.loadEquipment(false);
+    if (!document.hidden && equipNeeded() && Date.now() - equip.loadedAt > 60000) window.loadEquipment();
   });
+  // First check shortly after the board loads
+  setTimeout(function() { if (equipNeeded()) window.loadEquipment(); }, 1500);
 })();
 
 // ── Zello key-up → "add this unit to the call?" ─────────────────────
