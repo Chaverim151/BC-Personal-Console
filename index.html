@@ -4404,9 +4404,13 @@ function ezNameMatches(name, size, pn) {
   var n = ezNorm(name);
   if (pn && ezNorm(pn).length >= 4 && n.indexOf(ezNorm(pn)) !== -1) return true;
   if (!size || ezNorm(size).length < 5) return false;
-  // "175/70R20", "175/70-20" and "175 70 R20" all count as the same size
-  var bare = function(x) { return ezNorm(x).replace(/R(?=\d)/g, ''); };
-  return bare(name).indexOf(bare(size)) !== -1;
+  // "175/70R20", "175/70-20", "145/80D17", "205/50ZR17" and "T125/80R17"
+  // are compared on the numbers only (same size, any tire build letter)
+  var bare = function(x) { return ezNorm(x).replace(/(\d)(ZR|R|D|B)(?=\d)/g, '$1'); };
+  var want = bare(size).replace(/^[A-Z]+/, '');      // drop a leading "T" (temporary spare)
+  var m = String(name || '').toUpperCase().match(/(\d{3})\s*\/?\s*(\d{2})\s*-?\s*(?:ZR|R|D|B)?\s*-?\s*(\d{2})/);
+  if (m) return (m[1] + m[2] + m[3]) === want;      // exact size in the name, e.g. "EZ-Spare 175/70R20 1"
+  return bare(name).indexOf(want) !== -1;
 }
 // The sizes the vehicle can take, from the EZ Spare fitment lookup
 function ezSizesFromSpec(spec) {
