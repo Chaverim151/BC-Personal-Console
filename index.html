@@ -338,6 +338,54 @@ window.isMeaningfullyDifferentPoiName = function(name, address) {
   .ptt-label.rx { background: #2E7D32; color: #fff; max-width: 170px; overflow: hidden; text-overflow: ellipsis; }
   .page { padding-bottom: 7.5rem; }
 
+  /* ── Equipment panel (COBC) ── */
+  .equip-meta { margin-left: auto; font-size: 11px; color: #9A8050; display: flex; align-items: center; gap: 6px; }
+  .equip-refresh { background: none; border: 1px solid #DDD09A; border-radius: 7px; color: #9A7A20; cursor: pointer; padding: 2px 6px; font-size: 13px; }
+  .equip-refresh:hover { background: #F5ECC0; }
+  .equip-box { background: #fff; border: 1px solid #DDD09A; border-radius: 16px; padding: 0.9rem 1rem; box-shadow: 0 2px 12px rgba(180,140,20,0.08); }
+  .equip-filters { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+  .equip-filter { border: 1.5px solid #E0CC80; background: #FFFEF5; color: #6B5515; border-radius: 999px; padding: 5px 11px; font-size: 12.5px; font-weight: 600; cursor: pointer; font-family: inherit; }
+  .equip-filter b { font-weight: 800; }
+  .equip-filter.on { background: #0F0E06; color: #C8A532; border-color: #0F0E06; }
+  .equip-filter.out b { color: #B06000; } .equip-filter.dmg b { color: #B02800; } .equip-filter.mis b { color: #8B2000; }
+  .equip-filter.on b { color: inherit; }
+  .equip-search { margin-bottom: 10px; }
+  .equip-loc { border-top: 1px solid #F0E6C0; padding: 6px 0; }
+  .equip-loc:first-of-type { border-top: none; }
+  .equip-loc summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 700; color: #1A1400; padding: 4px 0; }
+  .equip-loc summary::-webkit-details-marker { display: none; }
+  .equip-loc summary .ti { color: #C8A532; transition: transform 0.15s; }
+  .equip-loc[open] summary .ti-chevron-right { transform: rotate(90deg); }
+  .equip-count { margin-left: auto; font-size: 12px; font-weight: 600; color: #6B5515; white-space: nowrap; }
+  .equip-cat { margin: 6px 0 8px 22px; }
+  .equip-cat-name { font-size: 12px; font-weight: 700; color: #8A6A10; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+  .equip-cat-name span { font-weight: 600; text-transform: none; letter-spacing: 0; color: #9A8050; }
+  .equip-items { display: flex; flex-wrap: wrap; gap: 5px; }
+  .equip-item { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 999px; border: 1px solid; white-space: nowrap; }
+  .equip-item.in { background: #E6F2E6; color: #1E5E22; border-color: #9CCB9F; }
+  .equip-item.out { background: #FFF1D6; color: #8A5A00; border-color: #E8C26E; }
+  .equip-item.unknown { background: #F0F0F0; color: #555; border-color: #CCC; }
+  .equip-item.damaged, .equip-item.missing { box-shadow: inset 0 0 0 1.5px #C62828; }
+  .equip-item small { font-weight: 700; opacity: 0.8; }
+  .equip-empty { font-size: 13px; color: #9A8050; text-align: center; padding: 0.6rem; }
+
+  /* ── Zello key-up prompts ("BC-12 keyed up — add to call?") ── */
+  .keyup-stack { position: fixed; left: 16px; bottom: calc(18px + env(safe-area-inset-bottom)); z-index: 950; display: flex; flex-direction: column-reverse; gap: 8px; max-width: min(360px, calc(100vw - 130px)); }
+  .keyup-card { background: #0F0E06; border: 1.5px solid #4CAF50; border-radius: 14px; padding: 10px 12px; color: #E8D98A; box-shadow: 0 8px 24px rgba(0,0,0,0.35); animation: keyup-in 0.18s ease-out; }
+  @keyframes keyup-in { from { transform: translateY(10px); opacity: 0; } to { transform: none; opacity: 1; } }
+  .keyup-top { display: flex; align-items: center; gap: 6px; font-size: 13px; margin-bottom: 8px; }
+  .keyup-top b { color: #fff; font-size: 15px; }
+  .keyup-top .ti { color: #4CAF50; font-size: 16px; }
+  .keyup-x { margin-left: auto; background: none; border: none; color: #7A6830; font-size: 18px; cursor: pointer; line-height: 1; padding: 0 2px; }
+  .keyup-x:hover { color: #C8A532; }
+  .keyup-call { width: 100%; margin-bottom: 8px; padding: 6px 8px; font-size: 13px; background: #1C1A08; color: #E8D98A; border: 1px solid #3A3010; border-radius: 8px; }
+  .keyup-btns { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .keyup-btns button { border: none; border-radius: 8px; padding: 8px 4px; font-size: 12.5px; font-weight: 700; cursor: pointer; font-family: inherit; color: #fff; }
+  .keyup-btns .r { background: #2E7D32; } .keyup-btns .b { background: #C88A12; } .keyup-btns .o { background: #3D6A99; }
+  .keyup-btns button:hover { filter: brightness(1.12); }
+  .keyup-btns button:disabled { opacity: 0.5; cursor: wait; }
+  .keyup-on { font-size: 11.5px; color: #9A8050; margin-bottom: 6px; }
+
   /* ── Active calls board ── */
   .board { margin-top: 1.75rem; }
   .board-empty { background: #fff; border: 1px dashed #DDD09A; border-radius: 14px; padding: 1.1rem; text-align: center; font-size: 13px; color: #9A8050; }
@@ -475,6 +523,7 @@ window.isMeaningfullyDifferentPoiName = function(name, address) {
 <div class="toast" id="toast"></div>
 
 <!-- Zello two-way radio: listens to the picked channel, hold to talk -->
+<div class="keyup-stack" id="keyupStack"></div>
 <div class="ptt-wrap">
   <div class="ptt-row">
     <button type="button" class="ptt-mute" id="pttKeyBtn" onclick="window.setPttKey()" title="Push-to-talk key: Space (click to change)"><i class="ti ti-keyboard"></i></button>
@@ -804,6 +853,22 @@ window.isMeaningfullyDifferentPoiName = function(name, address) {
     <div id="activeCallsList"><div class="board-empty">Loading active calls...</div></div>
     <datalist id="knownUnitsList"></datalist>
   </div>
+
+  <!-- Equipment (COBC Equipment API, read-only) -->
+  <div class="board">
+    <div class="section-row">
+      <div class="dot"></div>
+      <div class="section-lbl">Equipment</div>
+      <div class="equip-meta"><span id="equipUpdated"></span>
+        <button type="button" class="equip-refresh" onclick="window.loadEquipment(true)" title="Refresh now"><i class="ti ti-refresh"></i></button>
+      </div>
+    </div>
+    <div class="equip-box">
+      <div class="equip-filters" id="equipFilters"></div>
+      <div class="equip-search"><input type="text" id="equipSearch" placeholder="Search equipment (e.g. EZ Spare, generator, trailer)..." autocomplete="off" /></div>
+      <div id="equipList"><div class="equip-empty">Loading equipment...</div></div>
+    </div>
+  </div>
 </div>
 
 <!-- Locked inside modal -->
@@ -907,6 +972,7 @@ const db = getDatabase(app);
 window.isUrgent = false;
 window.chips = {};
 window.makesData = {};
+window.savedModels = {};   // models dispatchers saved themselves (kept alongside NHTSA's)
 
 // ── Comprehensive built-in makes & models (no seed script needed) ──
 window.makesData = {
@@ -1601,6 +1667,7 @@ async function loadAll() {
     if (makesSnap.exists()) {
       const saved = makesSnap.val();
       Object.keys(saved).forEach(function(m) {
+        window.savedModels[m] = Array.isArray(saved[m]) ? saved[m].slice() : [];
         if (!window.makesData[m]) window.makesData[m] = saved[m];
         else {
           // Merge custom models into existing make
@@ -1977,6 +2044,7 @@ window.selectYear = function(year) {
   var customWrap = document.getElementById('customYearWrap');
   if (customWrap) customWrap.style.display = (year === 'Other') ? 'block' : 'none';
   if (window.refreshVehicleTrim) window.refreshVehicleTrim();
+  if (window.loadNhtsaModels) window.loadNhtsaModels();
 };
 
 // Mobile: bottom-sheet overlay (same pattern as the color picker)
@@ -2030,7 +2098,16 @@ window.setYear = function(year) {
   var customWrap = document.getElementById('customYearWrap');
   if (customWrap) customWrap.style.display = (year === 'Other') ? 'block' : 'none';
   if (window.refreshVehicleTrim) window.refreshVehicleTrim();
+  if (window.loadNhtsaModels) window.loadNhtsaModels();
 };
+
+// Typed-in year (Other): reload models once it's 4 digits
+(function() {
+  var cy = document.getElementById('customYear');
+  if (cy) cy.addEventListener('input', function() {
+    if (/^\d{4}$/.test(cy.value.trim()) && window.loadNhtsaModels) window.loadNhtsaModels();
+  });
+})();
 
 // Build the year picker UI for the current device, and reset it to blank
 function buildYearUI() {
@@ -2389,6 +2466,67 @@ function populateMakes(makesObj) {
   if (!isMobile) buildMakeDropdownMenu(withOther);
 };
 
+// ── NHTSA model lists ──
+// Models come from NHTSA's vPIC database (through the bc-waha Worker), for the
+// picked make and, when set, the picked year. The built-in list shows first
+// and stays as the backup if NHTSA can't be reached.
+const NHTSA_PROXY = 'https://bc-waha.shmueleidelman-work.workers.dev/nhtsa/models';
+var nhtsaCache = {};
+var nhtsaSeq = 0;
+
+function currentVehicleYear() {
+  var y = (document.getElementById('vYear') || {}).value || '';
+  if (y === 'Other') y = ((document.getElementById('customYear') || {}).value || '').trim();
+  return /^\d{4}$/.test(y) ? y : '';
+}
+
+function nhtsaMakeName(make) {
+  // A few makes are named differently in NHTSA's database
+  var map = { 'Mini': 'MINI', 'Ram': 'RAM', 'Mercedes': 'Mercedes-Benz' };
+  return map[make] || make;
+}
+
+window.loadNhtsaModels = async function() {
+  var make = ((document.getElementById('vMake') || {}).value || '').trim();
+  if (!make || make === 'Other') return;
+  var year = currentVehicleYear();
+  var key = make.toLowerCase() + '|' + year;
+  var seq = ++nhtsaSeq;
+
+  var models = nhtsaCache[key];
+  if (!models) {
+    try {
+      var r = await fetch(NHTSA_PROXY + '?make=' + encodeURIComponent(nhtsaMakeName(make)) + (year ? '&year=' + year : ''));
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      var j = await r.json();
+      models = Array.isArray(j.models) ? j.models : [];
+      nhtsaCache[key] = models;
+    } catch (e) {
+      console.warn('NHTSA models unavailable, using built-in list:', e);
+      return;
+    }
+  }
+  // Ignore if the dispatcher changed make/year while this was loading
+  if (seq !== nhtsaSeq || ((document.getElementById('vMake') || {}).value || '').trim() !== make) return;
+  if (!models.length) return; // NHTSA had nothing — keep the built-in list
+
+  var merged = models.slice();
+  var lower = merged.map(function(m) { return m.toLowerCase(); });
+  (window.savedModels[make] || []).forEach(function(m) {
+    if (lower.indexOf(String(m).toLowerCase()) === -1) { merged.push(m); lower.push(String(m).toLowerCase()); }
+  });
+  // Keep whatever model is already picked, even if it isn't in the new list
+  var picked = ((document.getElementById('vModel') || {}).value || '').trim();
+  if (picked && picked !== 'Other' && lower.indexOf(picked.toLowerCase()) === -1) merged.push(picked);
+  merged.sort(function(a, b) { return a.localeCompare(b, 'en', { numeric: true, sensitivity: 'base' }); });
+
+  populateModelOptions(merged);
+  if (picked && !isMobile) {
+    var menu = document.getElementById('modelDropdownMenu');
+    if (menu) menu.querySelectorAll('.color-option').forEach(function(o) { o.classList.toggle('selected', o.dataset.value === picked); });
+  }
+};
+
 // ── Select a make: updates label/menu, logo, and dependent model list ──
 window.selectMake = function(make) {
   document.getElementById('vMake').value = make;
@@ -2415,10 +2553,11 @@ window.selectMake = function(make) {
   if (make && make !== 'Other' && window.makesData[make]) {
     var models = window.makesData[make];
     if (models.models) models = models.models;
-    if (Array.isArray(models)) { populateModelOptions(models); if (window.refreshVehicleTrim) window.refreshVehicleTrim(); return; }
+    if (Array.isArray(models)) { populateModelOptions(models); if (window.refreshVehicleTrim) window.refreshVehicleTrim(); window.loadNhtsaModels(); return; }
   }
   populateModelOptions([]);
   if (window.refreshVehicleTrim) window.refreshVehicleTrim();
+  window.loadNhtsaModels();
 };
 
 // ── Select a model: updates label/menu ──
@@ -2560,8 +2699,10 @@ window.saveCustomModel = async function() {
     models.push(model); models.sort();
     await set(ref(db, 'makes/' + make), models);
     window.makesData[make] = models;
+    window.savedModels[make] = (window.savedModels[make] || []).concat([model]);
     populateModelOptions(models);
     window.selectModel(model);
+    window.loadNhtsaModels();
     showToast('\u2713 Saved model "' + model + '"');
   } catch(e) { showToast('Could not save — check connection'); }
 };
@@ -3398,12 +3539,12 @@ var UNIT_ROLES = {
   observing:  { reply: 'Observing',  board: 'observing' }
 };
 
-window.callAddUnit = async function(id, role) {
+window.callAddUnit = async function(id, role, unitFromPrompt) {
   if (!UNIT_ROLES[role]) role = 'responding';
   var call = window._activeCalls[id];
   if (!call) return;
-  var input = document.getElementById('unitInput_' + id);
-  var unit = input ? input.value.trim().toUpperCase() : '';
+  var input = unitFromPrompt ? null : document.getElementById('unitInput_' + id);
+  var unit = unitFromPrompt ? String(unitFromPrompt).trim().toUpperCase() : (input ? input.value.trim().toUpperCase() : '');
   if (!unit) { showToast('Type a unit number first'); if (input) input.focus(); return; }
 
   var key = fbKey(unit);
@@ -3766,6 +3907,8 @@ function rxEnsureCtx() {
 }
 
 function rxStart(m) {
+  // Offer to add the talking unit to a call (works even if audio can't play)
+  try { if (window.offerKeyedUnit) window.offerKeyedUnit(m.from); } catch (e) { console.warn(e); }
   if (!('AudioDecoder' in window)) return;
   var sr = 16000, frameUs = (m.packet_duration || 60) * 1000;
   try {
@@ -4107,6 +4250,217 @@ function pttStop() {
   pttUpdateUi();
   zelloConnect();
 })();
+
+// ── Equipment (COBC) ────────────────────────────────────────────────
+// Read-only list of Bergen's equipment through the bc-waha Worker (which
+// holds the COBC key). Refreshes once a minute — COBC's data updates every 60 s.
+const EQUIP_URL = 'https://bc-waha.shmueleidelman-work.workers.dev/equipment?action=items';
+var equip = { items: [], filter: 'all', search: '', open: {}, loadedAt: 0, error: '' };
+
+function equipMatches(it) {
+  if (equip.filter === 'out' && it.status !== 'OUT') return false;
+  if (equip.filter === 'damaged' && it.condition !== 'Damaged') return false;
+  if (equip.filter === 'missing' && it.condition !== 'Missing') return false;
+  if (equip.search) {
+    var hay = (it.name + ' ' + it.category + ' ' + it.homeLocation).toLowerCase();
+    var words = equip.search.toLowerCase().split(/\s+/).filter(Boolean);
+    for (var i = 0; i < words.length; i++) {
+      // "spares" should still find "EZ Spare"
+      var w = words[i].replace(/s$/, '');
+      if (hay.indexOf(w) === -1) return false;
+    }
+  }
+  return true;
+}
+
+function renderEquipment() {
+  var listEl = document.getElementById('equipList');
+  var filtersEl = document.getElementById('equipFilters');
+  if (!listEl || !filtersEl) return;
+  var items = equip.items;
+
+  // Totals (filter chips)
+  var t = { all: items.length, out: 0, damaged: 0, missing: 0, inn: 0 };
+  items.forEach(function(it) {
+    if (it.status === 'IN') t.inn++;
+    if (it.status === 'OUT') t.out++;
+    if (it.condition === 'Damaged') t.damaged++;
+    if (it.condition === 'Missing') t.missing++;
+  });
+  function chip(key, cls, label, n) {
+    return '<button type="button" class="equip-filter ' + cls + (equip.filter === key ? ' on' : '') + '" onclick="window.setEquipFilter(\'' + key + '\')"><b>' + n + '</b> ' + label + '</button>';
+  }
+  filtersEl.innerHTML = items.length
+    ? chip('all', '', 'items · ' + t.inn + ' in', t.all) + chip('out', 'out', 'out', t.out) +
+      chip('damaged', 'dmg', 'damaged', t.damaged) + chip('missing', 'mis', 'missing', t.missing)
+    : '';
+
+  if (!items.length) {
+    listEl.innerHTML = '<div class="equip-empty">' + escapeHtml(equip.error ? 'Could not load equipment — ' + equip.error : 'Loading equipment...') + '</div>';
+    return;
+  }
+
+  // Group: location → category → items
+  var groups = {}, locOrder = [];
+  items.forEach(function(it) {
+    var loc = it.homeLocation || 'No location';
+    if (!groups[loc]) { groups[loc] = { cats: {}, total: 0, inn: 0, shown: 0 }; locOrder.push(loc); }
+    var g = groups[loc];
+    g.total++; if (it.status === 'IN') g.inn++;
+    var cat = it.category || 'Other';
+    if (!g.cats[cat]) g.cats[cat] = { all: [], shown: [] };
+    g.cats[cat].all.push(it);
+    if (equipMatches(it)) { g.cats[cat].shown.push(it); g.shown++; }
+  });
+  locOrder.sort(function(a, b) { return a.localeCompare(b); });
+
+  var filtering = equip.filter !== 'all' || !!equip.search;
+  var html = '';
+  locOrder.forEach(function(loc) {
+    var g = groups[loc];
+    if (filtering && !g.shown) return;
+    var isOpen = filtering || equip.open[loc];
+    html += '<details class="equip-loc"' + (isOpen ? ' open' : '') + ' ontoggle="window.equipToggled(this, ' + escapeHtml(JSON.stringify(loc)) + ')">' +
+      '<summary><i class="ti ti-chevron-right"></i><i class="ti ti-map-pin"></i>' + escapeHtml(loc) +
+      '<span class="equip-count">' + (filtering ? g.shown + ' match' + (g.shown === 1 ? '' : 'es') + ' · ' : '') + g.inn + '/' + g.total + ' in</span></summary>';
+    Object.keys(g.cats).sort().forEach(function(cat) {
+      var c = g.cats[cat];
+      if (filtering && !c.shown.length) return;
+      var catIn = c.all.filter(function(it) { return it.status === 'IN'; }).length;
+      var list = (filtering ? c.shown : c.all).slice().sort(function(a, b) {
+        return String(a.name).localeCompare(String(b.name), 'en', { numeric: true });
+      });
+      html += '<div class="equip-cat"><div class="equip-cat-name">' + escapeHtml(cat) + ' <span>' + catIn + '/' + c.all.length + ' in</span></div><div class="equip-items">' +
+        list.map(function(it) {
+          var st = it.status === 'IN' ? 'in' : it.status === 'OUT' ? 'out' : 'unknown';
+          var cond = it.condition === 'Damaged' ? ' damaged' : it.condition === 'Missing' ? ' missing' : '';
+          var tag = it.status === 'OUT' ? (it.outType ? 'OUT · ' + it.outType : 'OUT') : it.status === 'IN' ? '' : '?';
+          if (cond) tag = (tag ? tag + ' · ' : '') + it.condition.toUpperCase();
+          var tip = it.name + ' — ' + it.status + (it.outType ? ' (' + it.outType + ')' : '') + ', ' + it.condition + (it.lastUpdated ? ', updated ' + it.lastUpdated : '');
+          return '<span class="equip-item ' + st + cond + '" title="' + escapeHtml(tip) + '">' + escapeHtml(it.name) + (tag ? ' <small>' + escapeHtml(tag) + '</small>' : '') + '</span>';
+        }).join('') + '</div></div>';
+    });
+    html += '</details>';
+  });
+  listEl.innerHTML = html || '<div class="equip-empty">No equipment matches</div>';
+}
+
+window.equipToggled = function(el, loc) {
+  if (equip.filter === 'all' && !equip.search) equip.open[loc] = el.open;
+};
+window.setEquipFilter = function(f) {
+  equip.filter = (equip.filter === f && f !== 'all') ? 'all' : f;
+  renderEquipment();
+};
+
+window.loadEquipment = async function(manual) {
+  var upd = document.getElementById('equipUpdated');
+  if (manual && upd) upd.textContent = 'Refreshing…';
+  try {
+    var r = await fetch(EQUIP_URL, { cache: 'no-store' });
+    var data = await r.json().catch(function() { return null; });
+    if (!r.ok || !data || !data.ok) throw new Error((data && data.error) || ('HTTP ' + r.status));
+    equip.items = Array.isArray(data.items) ? data.items : [];
+    equip.error = '';
+    equip.loadedAt = Date.now();
+    if (upd) upd.textContent = 'Updated ' + formatTime(data.generatedAt ? Date.parse(data.generatedAt) : Date.now());
+  } catch (e) {
+    console.warn('Equipment load failed:', e);
+    equip.error = e.message || 'error';
+    if (upd) upd.textContent = equip.items.length ? 'Update failed — showing last list' : '';
+    if (manual) showToast('Equipment: ' + equip.error);
+  }
+  renderEquipment();
+};
+
+(function setupEquipment() {
+  var search = document.getElementById('equipSearch');
+  if (search) search.addEventListener('input', function() { equip.search = search.value.trim(); renderEquipment(); });
+  window.loadEquipment(false);
+  // Once a minute while the page is visible (COBC asks for no more than that)
+  setInterval(function() { if (!document.hidden) window.loadEquipment(false); }, 60000);
+  document.addEventListener('visibilitychange', function() {
+    if (!document.hidden && Date.now() - equip.loadedAt > 60000) window.loadEquipment(false);
+  });
+})();
+
+// ── Zello key-up → "add this unit to the call?" ─────────────────────
+// When someone talks on Zello and their Zello name has a unit number
+// (e.g. "BC-12", "BC 12 Moshe"), offer to add them to an active call.
+var keyup = { shown: {}, dismissed: {} };
+const KEYUP_SNOOZE_MS = 3 * 60 * 1000;   // after ×, don't ask about that unit again for 3 min
+const KEYUP_AUTOHIDE_MS = 60 * 1000;     // prompt disappears by itself after 1 min
+
+function unitFromZelloName(name) {
+  var m = String(name || '').match(/\b([A-Za-z]{1,4})[\s-]?(\d{1,4})\b/);
+  return m ? (m[1].toUpperCase() + '-' + m[2]) : null;
+}
+
+function keyupCallsFor(unit) {
+  // Active calls this unit isn't already on, newest first
+  var key = fbKey(unit);
+  return Object.keys(window._activeCalls || {}).map(function(k) { return window._activeCalls[k]; })
+    .filter(function(c) { return !(c.units && c.units[key]); })
+    .sort(function(a, b) { return (b.createdAt || 0) - (a.createdAt || 0); });
+}
+
+window.offerKeyedUnit = function(zelloName) {
+  var unit = unitFromZelloName(zelloName);
+  if (!unit) return;
+  if (keyup.dismissed[unit] && Date.now() - keyup.dismissed[unit] < KEYUP_SNOOZE_MS) return;
+  var calls = keyupCallsFor(unit);
+  if (!calls.length) return;               // no open calls, or already on all of them
+
+  var stack = document.getElementById('keyupStack');
+  if (!stack) return;
+  var existing = keyup.shown[unit];
+  if (existing) {                          // already asking — just restart its timer
+    clearTimeout(existing.timer);
+    existing.timer = setTimeout(function() { keyupClose(unit, false); }, KEYUP_AUTOHIDE_MS);
+    return;
+  }
+  // Keep at most 3 prompts on screen
+  var open = Object.keys(keyup.shown);
+  if (open.length >= 3) keyupClose(open[0], false);
+
+  var card = document.createElement('div');
+  card.className = 'keyup-card';
+  var safe = escapeHtml(unit);
+  card.innerHTML =
+    '<div class="keyup-top"><i class="ti ti-microphone"></i><b>' + safe + '</b> keyed up' +
+      '<button type="button" class="keyup-x" title="Dismiss">&times;</button></div>' +
+    (calls.length > 1
+      ? '<select class="keyup-call">' + calls.map(function(c) {
+          return '<option value="' + escapeHtml(c.id) + '">' + escapeHtml(callLabel(c) + (c.nature ? ' — ' + c.nature : '')) + '</option>';
+        }).join('') + '</select>'
+      : '<div class="keyup-on">Add to ' + escapeHtml(callLabel(calls[0]) + (calls[0].nature ? ' — ' + calls[0].nature : '')) + '?</div>') +
+    '<div class="keyup-btns">' +
+      '<button type="button" class="r" data-role="responding">Responding</button>' +
+      '<button type="button" class="b" data-role="backup">Backing up</button>' +
+      '<button type="button" class="o" data-role="observing">Observing</button>' +
+    '</div>';
+  stack.appendChild(card);
+
+  card.querySelector('.keyup-x').onclick = function() { keyupClose(unit, true); };
+  card.querySelectorAll('.keyup-btns button').forEach(function(b) {
+    b.onclick = async function() {
+      var sel = card.querySelector('.keyup-call');
+      var callId = sel ? sel.value : calls[0].id;
+      if (!window._activeCalls[callId]) { showToast('That call was cleared'); keyupClose(unit, false); return; }
+      card.querySelectorAll('button').forEach(function(x) { x.disabled = true; });
+      await window.callAddUnit(callId, b.dataset.role, unit);
+      keyupClose(unit, false);
+    };
+  });
+
+  keyup.shown[unit] = { el: card, timer: setTimeout(function() { keyupClose(unit, false); }, KEYUP_AUTOHIDE_MS) };
+};
+
+function keyupClose(unit, snooze) {
+  var k = keyup.shown[unit];
+  if (k) { clearTimeout(k.timer); if (k.el && k.el.parentNode) k.el.parentNode.removeChild(k.el); delete keyup.shown[unit]; }
+  if (snooze) keyup.dismissed[unit] = Date.now();
+}
 
 window.verifyLocation = function() {
   var loc = document.getElementById('location').value;
