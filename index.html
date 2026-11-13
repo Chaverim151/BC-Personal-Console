@@ -1440,6 +1440,7 @@ window.refreshVehicleTrim = async function() {
 
   // Trim/hardware are no longer valid for whatever was previously selected
   window.ezSpareSpec = null;
+  if (window.renderFormEquip) setTimeout(window.renderFormEquip, 0);
   var resultEl = document.getElementById('ezSpareResult');
   if (resultEl) resultEl.style.display = 'none';
   var hintEl = document.getElementById('ezSpareHint');
@@ -1477,6 +1478,7 @@ window.onVehicleTrimChange = async function() {
   var ezActive = window.chips && window.chips['spare'] && window.chips['spare'].id === 'no_spare_needs_ez';
 
   window.ezSpareSpec = null;
+  if (window.renderFormEquip) setTimeout(window.renderFormEquip, 0);
   if (!resultEl) return;
 
   if (!ezActive) { resultEl.style.display = 'none'; return; }
@@ -1506,6 +1508,7 @@ window.onVehicleTrimChange = async function() {
   }
 
   window.ezSpareSpec = spec;
+  if (window.renderFormEquip) window.renderFormEquip();
   window.ezSpareTrimLabel = trimSel.options[trimSel.selectedIndex] ? trimSel.options[trimSel.selectedIndex].textContent : '';
 
   resultEl.innerHTML =
@@ -2792,6 +2795,7 @@ window.onNatureChange = function() {
   document.getElementById('ezSpareWrap').classList.remove('on');
   document.getElementById('vTrimWrap').classList.remove('on');
   window.ezSpareSpec = null;
+  if (window.renderFormEquip) setTimeout(window.renderFormEquip, 0);
   var ezResult = document.getElementById('ezSpareResult');
   if (ezResult) ezResult.style.display = 'none';
 };
@@ -2827,6 +2831,7 @@ window.trappedWho = function(who) {
 // ── Chip select ──
 window.selectChip = function(evt, group, id, label) {
   window.chips[group] = { id: id, label: label };
+  if (group === 'spare' && window.renderFormEquip) setTimeout(window.renderFormEquip, 0);
   var parent = evt.target.parentElement;
   parent.querySelectorAll('.chip').forEach(function(c){ c.classList.remove('selected'); });
   evt.target.classList.add('selected');
@@ -2872,6 +2877,7 @@ window.selectChip = function(evt, group, id, label) {
       ezWrap.classList.remove('on');
       trimWrap.classList.remove('on');
       window.ezSpareSpec = null;
+  if (window.renderFormEquip) setTimeout(window.renderFormEquip, 0);
       var ezResult = document.getElementById('ezSpareResult');
       if (ezResult) ezResult.style.display = 'none';
     }
@@ -3494,6 +3500,8 @@ async function createActiveCall(d, waMessageId) {
     poiName: d.poiName || '',
     nature: d.nature || '',
     natureKey: (document.getElementById('natureType') || {}).value || '',
+    needsEz: !!(window.chips && window.chips.spare && window.chips.spare.id === 'no_spare_needs_ez'),
+    ezSizes: ezSizesFromSpec(window.ezSpareSpec),
     phone: d.phone || '',
     name: d.name || '',
     urgent: !!d.urgent,
@@ -3727,7 +3735,7 @@ function renderActiveCalls() {
       '<div class="call-card-body">' +
         (call.lockedInside ? '<div class="call-line" style="color:#B02800;font-weight:700;">' + escapeHtml(call.lockedInside.toUpperCase()) + '</div>' : '') +
         '<div class="call-line"><b>Nature:</b> ' + escapeHtml(call.nature || '—') + '</div>' +
-        neededEquipHtml(callNatureKey(call), call.lat, call.lng) +
+        neededEquipHtml(callNatureKey(call), call.lat, call.lng, { needsEz: !!call.needsEz, ezSizes: call.ezSizes || null }) +
         '<div class="call-line"><b>Location:</b> ' + escapeHtml((call.poiName ? call.poiName + ' — ' : '') + (call.location || '—')) + '</div>' +
         ((call.name || call.phone) ? '<div class="call-line"><b>Caller:</b> ' + escapeHtml([call.name, call.phone].filter(Boolean).join(' · ')) + '</div>' : '') +
         (call.waMessageId ? '' : '<div class="call-noreply">Updates for this call will be sent as new messages (no original message to reply to).</div>') +
@@ -4388,23 +4396,75 @@ function requestDriveTimes(callPt, locNames) {
   }
 }
 
+// ── EZ Spare matching ──
+// Only count EZ Spares whose name has the vehicle's preferred or secondary
+// size (e.g. "175/70R20") or its part number (e.g. "40060PW").
+function ezNorm(x) { return String(x || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); }
+function ezNameMatches(name, size, pn) {
+  var n = ezNorm(name);
+  if (pn && ezNorm(pn).length >= 4 && n.indexOf(ezNorm(pn)) !== -1) return true;
+  if (!size || ezNorm(size).length < 5) return false;
+  // "175/70R20", "175/70-20" and "175 70 R20" all count as the same size
+  var bare = function(x) { return ezNorm(x).replace(/R(?=\d)/g, ''); };
+  return bare(name).indexOf(bare(size)) !== -1;
+}
+// The sizes the vehicle can take, from the EZ Spare fitment lookup
+function ezSizesFromSpec(spec) {
+  if (!spec) return null;
+  var out = [];
+  if (spec.size_1) out.push({ which: 'preferred', size: spec.size_1, pn: spec.kit || '' });
+  if (spec.size_2) out.push({ which: 'secondary', size: spec.size_2, pn: spec.size_2_pn || '' });
+  return out.length ? out : null;
+}
+
+// What to count for this call: one group per category, or per matching EZ Spare size
+function equipGroups(natureKey, ezSizes) {
+  if (natureKey === 'flat_tire') {
+    var groups = [];
+    (ezSizes || []).forEach(function(z) {
+      var same = groups.filter(function(g) { return ezNorm(g.size) === ezNorm(z.size); })[0];
+      if (same) { same.label = same.size + ' EZ Spare (preferred & secondary)'; same.pns.push(z.pn); return; }
+      groups.push({ size: z.size, pns: [z.pn], label: z.size + ' EZ Spare (' + z.which + ')' });
+    });
+    return groups.map(function(g) {
+      return { label: g.label, test: function(it) {
+        if (String(it.category || '').toLowerCase() !== 'ez spares') return false;
+        return g.pns.some(function(pn) { return ezNameMatches(it.name, g.size, pn); }) || ezNameMatches(it.name, g.size, '');
+      } };
+    });
+  }
+  return (EQUIP_FOR_NATURE[natureKey] || []).map(function(c) {
+    return { label: c, test: function(it) { return String(it.category || '').toLowerCase() === c.toLowerCase(); } };
+  });
+}
+
 // HTML box listing where the needed equipment is available ('' if none needed)
-function neededEquipHtml(natureKey, lat, lng) {
-  var cats = EQUIP_FOR_NATURE[natureKey];
-  if (!cats) return '';
-  var title = '<div class="ne-title"><i class="ti ti-tool"></i> Available equipment' +
+// opts: { needsEz: bool, ezSizes: [...] } — for Flat Tire calls
+function neededEquipHtml(natureKey, lat, lng, opts) {
+  opts = opts || {};
+  if (!EQUIP_FOR_NATURE[natureKey]) return '';
+  // Flat tire: only when the caller needs an EZ spare, and only matching sizes
+  if (natureKey === 'flat_tire' && !opts.needsEz) return '';
+  if (natureKey === 'flat_tire' && !(opts.ezSizes && opts.ezSizes.length)) {
+    return '<div class="need-equip"><div class="ne-title"><i class="ti ti-tool"></i> Matching EZ Spares</div>' +
+      '<div class="ne-note">Pick the year, make, model and trim below \u2014 then this shows where a matching EZ Spare is in storage.</div></div>';
+  }
+  var groups = equipGroups(natureKey, opts.ezSizes);
+  var cats = groups.map(function(g) { return g.label; });
+  var title = '<div class="ne-title"><i class="ti ti-tool"></i> ' + (natureKey === 'flat_tire' ? 'Matching EZ Spares' : 'Available equipment') +
     (equip.loadedAt ? '<span class="ne-time">as of ' + escapeHtml(formatTime(equip.loadedAt)) + '</span>' : '') + '</div>';
   if (!equip.loadedAt) {
     return '<div class="need-equip">' + title + '<div class="ne-note">' +
       (equip.error ? 'Could not load equipment — ' + escapeHtml(equip.error) : 'Checking equipment…') + '</div></div>';
   }
   var callPt = (lat != null && lng != null && lat !== '' && lng !== '' && !isNaN(parseFloat(lat))) ? { lat: parseFloat(lat), lng: parseFloat(lng) } : null;
-  var lowerCats = cats.map(function(c) { return c.toLowerCase(); });
   var byLoc = {}, totals = {};
   cats.forEach(function(c) { totals[c] = 0; });
   equip.items.forEach(function(it) {
-    var ci = lowerCats.indexOf(String(it.category || '').toLowerCase());
-    if (ci === -1 || it.status !== 'IN' || it.condition !== 'OK') return;
+    if (it.status !== 'IN' || it.condition !== 'OK') return;
+    var ci = -1;
+    for (var gi = 0; gi < groups.length; gi++) if (groups[gi].test(it)) { ci = gi; break; }
+    if (ci === -1) return;
     var loc = it.homeLocation || 'No location';
     if (!byLoc[loc]) byLoc[loc] = { total: 0, counts: {}, miles: null };
     byLoc[loc].counts[cats[ci]] = (byLoc[loc].counts[cats[ci]] || 0) + 1;
@@ -4441,13 +4501,18 @@ function neededEquipHtml(natureKey, lat, lng) {
       '<span class="ne-loc">' + escapeHtml(loc) + '</span><span class="ne-counts">' + parts.join(' · ') + '</span></div>';
   }).join('');
   var missing = cats.filter(function(c) { return !totals[c]; });
-  var none = missing.length ? '<div class="ne-none">None available: ' + missing.map(escapeHtml).join(', ') + '</div>' : '';
+  var none = '';
+  if (natureKey === 'flat_tire') {
+    if (!locs.length) none = '<div class="ne-none">No ' + escapeHtml(opts.ezSizes.map(function(z) { return z.size; })
+      .filter(function(v, i, a) { return a.indexOf(v) === i; }).join(' or ')) + ' EZ Spare is available in storage.</div>';
+  } else if (missing.length) {
+    none = '<div class="ne-none">None available: ' + missing.map(escapeHtml).join(', ') + '</div>';
+  }
   var notes = [];
   if (!callPt && locs.length > 1) notes.push('Enter the location to sort by drive time.');
   else if (callPt && driveError && !locs.some(function(l) { return byLoc[l].mins != null; })) {
     notes.push('Drive times unavailable (Google: ' + escapeHtml(driveError) + ') \u2014 showing straight-line miles.');
   }
-  if (natureKey === 'flat_tire') notes.push('Showing all EZ Spares for now — size matching to the vehicle is coming.');
   return '<div class="need-equip">' + title + rows + none +
     (notes.length ? '<div class="ne-note">' + notes.join(' ') + '</div>' : '') + '</div>';
 }
@@ -4457,7 +4522,10 @@ window.renderFormEquip = function() {
   if (!box) return;
   var key = (document.getElementById('natureType') || {}).value;
   var locEl = document.getElementById('location') || { dataset: {} };
-  var html = neededEquipHtml(key, locEl.dataset.lat, locEl.dataset.lng);
+  var html = neededEquipHtml(key, locEl.dataset.lat, locEl.dataset.lng, {
+    needsEz: !!(window.chips && window.chips.spare && window.chips.spare.id === 'no_spare_needs_ez'),
+    ezSizes: ezSizesFromSpec(window.ezSpareSpec)
+  });
   box.innerHTML = html;
   box.style.display = html ? '' : 'none';
   if (html && Date.now() - equip.loadedAt > 60000) window.loadEquipment();
@@ -4615,6 +4683,7 @@ window.clearForm = async function() {
   document.getElementById('ezSpareWrap').classList.remove('on');
   document.getElementById('vTrimWrap').classList.remove('on');
   window.ezSpareSpec = null;
+  if (window.renderFormEquip) setTimeout(window.renderFormEquip, 0);
   var ezResult = document.getElementById('ezSpareResult');
   if (ezResult) ezResult.style.display = 'none';
   var ezHint = document.getElementById('ezSpareHint');
