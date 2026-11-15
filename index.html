@@ -3726,7 +3726,9 @@ window.setAutoPush = async function(id, mins) {
       showToast('Auto push off for ' + callLabel(call));
     } else {
       autoPushPick[id] = mins;
-      await update(ref(db, 'activeCalls/' + id), { autoPush: { every: mins, nextAt: Date.now() + mins * 60000, startedAt: Date.now() } });
+      // Count from the last push (or the original dispatch if never pushed)
+      var base = call.lastPushAt || call.createdAt || Date.now();
+      await update(ref(db, 'activeCalls/' + id), { autoPush: { every: mins, nextAt: base + mins * 60000, startedAt: Date.now() } });
       showToast('\u2713 Auto push every ' + mins + ' min for ' + callLabel(call));
     }
   } catch (e) { showToast('Could not save \u2014 check connection'); }
@@ -3738,6 +3740,7 @@ async function autoPushTick() {
   Object.keys(calls).forEach(function(id) {
     var call = calls[id], ap = call.autoPush;
     if (!ap) return;
+    if (!ap.every) { update(ref(db, 'activeCalls/' + id), { autoPush: null }).catch(function() {}); return; }
     var el = document.getElementById('apNext_' + id);
     if (callResponder(call)) {           // someone's responding — stop pushing
       update(ref(db, 'activeCalls/' + id), { autoPush: null }).catch(function() {});
@@ -3769,7 +3772,10 @@ window.callPush = async function(id) {
     if (await postCallUpdate(call, PUSH_CALL_TEXT)) {
       showToast('\u2713 Pushed ' + callLabel(call));
       try {
-        await update(ref(db, 'activeCalls/' + id), { lastPushAt: Date.now(), pushCount: (call.pushCount || 0) + 1 });
+        var now = Date.now(), upd = { lastPushAt: now, pushCount: (call.pushCount || 0) + 1 };
+        var ap = (window._activeCalls[id] || {}).autoPush;
+        if (ap) upd['autoPush/nextAt'] = now + (ap.every || 5) * 60000;   // any push restarts the clock
+        await update(ref(db, 'activeCalls/' + id), upd);
       } catch (e) {}
     }
   } finally {
