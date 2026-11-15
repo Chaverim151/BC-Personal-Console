@@ -472,6 +472,16 @@ window.isMeaningfullyDifferentPoiName = function(name, address) {
 
   /* ── Active calls board ── */
   .board { margin-top: 1.75rem; }
+  .cleared-toggle { margin-top: 10px; background: none; border: none; color: #9A8050; font-size: 12.5px; font-weight: 700; cursor: pointer; font-family: inherit; display: inline-flex; align-items: center; gap: 5px; padding: 4px 2px; }
+  .cleared-toggle:hover { color: #6B5515; }
+  #clearedList { margin-top: 6px; background: #fff; border: 1px solid #E8DEB4; border-radius: 12px; overflow: hidden; }
+  .cleared-row { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-top: 1px solid #F0E8C8; }
+  .cleared-row:first-child { border-top: none; }
+  .cleared-row .info { flex: 1; min-width: 0; }
+  .cleared-row b { font-size: 13.5px; color: #0F0E06; }
+  .cleared-row span { display: block; font-size: 12px; color: #6B5515; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cleared-row button { background: #C8A532; color: #0F0E06; border: none; border-radius: 8px; padding: 6px 12px; font-size: 12.5px; font-weight: 700; cursor: pointer; font-family: inherit; white-space: nowrap; }
+  .cleared-row button:disabled { opacity: 0.5; cursor: wait; }
   .board-empty { background: #fff; border: 1px dashed #DDD09A; border-radius: 14px; padding: 1.1rem; text-align: center; font-size: 13px; color: #9A8050; }
   .call-card { background: #fff; border: 1px solid #DDD09A; border-radius: 16px; overflow: hidden; margin-bottom: 12px; box-shadow: 0 2px 12px rgba(180,140,20,0.08); }
   .call-card.urgent { border-color: #E03000; box-shadow: 0 0 0 2px rgba(224,48,0,0.15); }
@@ -980,6 +990,8 @@ window.isMeaningfullyDifferentPoiName = function(name, address) {
       <div class="section-lbl">Active calls <span id="activeCallCount"></span></div>
     </div>
     <div id="activeCallsList"><div class="board-empty">Loading active calls...</div></div>
+    <button type="button" class="cleared-toggle" id="clearedToggle" onclick="window.toggleCleared()"><i class="ti ti-history"></i> Recently cleared calls</button>
+    <div id="clearedList" style="display:none"></div>
     <datalist id="knownUnitsList"></datalist>
   </div>
 
@@ -4355,6 +4367,58 @@ function rpRender() {
     : 'Sends privately to ' + rpName(t) + '.';
 }
 document.addEventListener('keydown', function(e) { if (e.key === 'Escape' && rp.open) window.closeReplies(); });
+
+// ── Recently cleared calls (reopen one back onto the board) ──
+var clearedOpen = false, clearedItems = {};
+window.toggleCleared = async function() {
+  clearedOpen = !clearedOpen;
+  var box = document.getElementById('clearedList');
+  box.style.display = clearedOpen ? '' : 'none';
+  if (clearedOpen) await loadCleared();
+};
+async function loadCleared() {
+  var box = document.getElementById('clearedList');
+  box.innerHTML = '<div class="board-empty" style="border:none">Loading\u2026</div>';
+  try {
+    var snap = await get(ref(db, 'callHistory'));
+    var all = snap.exists() ? snap.val() : {};
+    var keys = Object.keys(all).sort(function(a, b) { return (all[b].clearedAt || 0) - (all[a].clearedAt || 0); }).slice(0, 15);
+    clearedItems = {};
+    keys.forEach(function(k) { clearedItems[k] = all[k]; });
+    if (!keys.length) { box.innerHTML = '<div class="board-empty" style="border:none">No cleared calls yet</div>'; return; }
+    box.innerHTML = keys.map(function(k) {
+      var c = all[k];
+      var when = c.clearedAt ? new Date(c.clearedAt) : null;
+      var whenTxt = when ? ((when.toDateString() === new Date().toDateString() ? '' : (when.getMonth() + 1) + '/' + when.getDate() + ' ') + formatTime(c.clearedAt)) : '';
+      return '<div class="cleared-row"><div class="info"><b>' + escapeHtml(callLabel(c)) + '</b> <small style="color:#9A8050">cleared ' + escapeHtml(whenTxt) + '</small>' +
+        '<span>' + escapeHtml(c.nature || '') + (c.location ? ' \u00B7 ' + escapeHtml(c.location) : '') + '</span></div>' +
+        '<button type="button" onclick="window.reopenCall(\'' + escapeHtml(k) + '\', this)">Reopen</button></div>';
+    }).join('');
+  } catch (e) {
+    box.innerHTML = '<div class="board-empty" style="border:none">Could not load cleared calls</div>';
+  }
+}
+window.reopenCall = async function(histKey, btn) {
+  var c = clearedItems[histKey];
+  if (!c) return;
+  var id = c.id || ('U' + Date.now());
+  if (window._activeCalls[id] && !confirm(callLabel(c) + ' is already on the board. Replace it with the cleared one?')) return;
+  if (btn) btn.disabled = true;
+  var call = Object.assign({}, c);
+  delete call.clearedAt;
+  delete call.autoPush;
+  var updates = {};
+  updates['activeCalls/' + id] = call;
+  updates['callHistory/' + histKey] = null;
+  try {
+    await update(ref(db), updates);
+    showToast('\u2713 ' + callLabel(call) + ' is back on the board (nothing was sent to WhatsApp)');
+    await loadCleared();
+  } catch (e) {
+    showToast('Could not reopen \u2014 check connection');
+    if (btn) btn.disabled = false;
+  }
+};
 
 // Live updates — the board refreshes on its own whenever anything changes
 function startBoard() {
