@@ -415,6 +415,19 @@ window.isMeaningfullyDifferentPoiName = function(name, address) {
   .rp-hint { font-size: 11px; color: #9A8050; margin-top: 6px; }
   .rp-call { display: inline-block; font-size: 10.5px; font-weight: 800; background: #0F0E06; color: #C8A532; border-radius: 5px; padding: 1px 6px; margin-bottom: 4px; }
   .rp-thread .rp-call { margin: 0; }
+  .call-card.awaiting { box-shadow: 0 0 0 3px #E8A317, 0 4px 16px rgba(232,163,23,0.35); animation: awaitPulse 2s ease-in-out infinite; }
+  @keyframes awaitPulse { 50% { box-shadow: 0 0 0 3px rgba(232,163,23,0.45), 0 4px 16px rgba(232,163,23,0.15); } }
+  .call-await-tag { background: #E8A317; color: #0F0E06; font-size: 11px; font-weight: 800; border-radius: 6px; padding: 2px 8px; margin-left: 8px; display: inline-flex; align-items: center; gap: 4px; text-transform: uppercase; letter-spacing: .3px; }
+  .await-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+  .await-row { display: flex; align-items: center; gap: 8px; background: #FFF4D6; border: 1.5px solid #E8A317; border-radius: 10px; padding: 7px 10px; }
+  .await-row .ti-hourglass { color: #C27C00; font-size: 17px; }
+  .await-row .info { flex: 1; min-width: 0; }
+  .await-row .info b { font-size: 13.5px; color: #0F0E06; }
+  .await-row .info span { display: block; font-size: 12.5px; color: #6B5515; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .await-row button { border: none; border-radius: 8px; font-family: inherit; font-weight: 700; font-size: 12.5px; padding: 6px 11px; cursor: pointer; white-space: nowrap; }
+  .await-row .rep { background: #E8A317; color: #0F0E06; }
+  .await-row .ok { background: transparent; color: #9A8050; padding: 6px 6px; }
+  .await-row .ok:hover { color: #0F0E06; }
   .call-replies { margin-top: 10px; border: 1.5px solid #E0D4A0; background: #fff; border-radius: 10px; overflow: hidden; }
   .call-replies-hdr { display: flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 800; color: #6B5515; background: #FDF6D8; padding: 6px 10px; }
   .call-replies-hdr .ti { color: #C8A532; font-size: 15px; }
@@ -3914,13 +3927,16 @@ function renderActiveCalls() {
       '</span>';
     }).join('') : '<span class="unit-none">No units yet</span>';
 
-    return '<div class="call-card' + (call.urgent ? ' urgent' : '') + '" id="callCard_' + id + '">' +
+    var awaitHtml = (typeof rp !== 'undefined' && rp) ? awaitingHtml(call) : '';
+    return '<div class="call-card' + (call.urgent ? ' urgent' : '') + (awaitHtml ? ' awaiting' : '') + '" id="callCard_' + id + '">' +
       '<div class="call-card-hdr">' +
         (call.urgent ? '<span class="call-urgent-tag">URGENT</span>' : '') +
         '<span class="call-card-num">' + escapeHtml(callLabel(call)) + '</span>' +
+        (awaitHtml ? '<span class="call-await-tag"><i class="ti ti-hourglass"></i> Awaiting reply</span>' : '') +
         '<span class="call-card-time">' + escapeHtml(formatTime(call.createdAt)) + '</span>' +
       '</div>' +
       '<div class="call-card-body">' +
+        awaitHtml +
         (call.lockedInside ? '<div class="call-line" style="color:#B02800;font-weight:700;">' + escapeHtml(call.lockedInside.toUpperCase()) + '</div>' : '') +
         '<div class="call-line"><b>Nature:</b> ' + escapeHtml(call.nature || '—') + '</div>' +
         neededEquipHtml(callNatureKey(call), call.lat, call.lng, { needsEz: !!call.needsEz, ezSizes: call.ezSizes || null }) +
@@ -4035,6 +4051,43 @@ function repliesForCall(call) {
   });
   return out.sort(function(a, b) { return (b.m.at || 0) - (a.m.at || 0); });
 }
+
+// "BC-16 Moshe" -> "BC-16" (falls back to their WhatsApp name / number)
+function rpUnitLabel(t) {
+  var m = String(t.name || '').match(/\b([A-Z]{1,3})\s*-?\s*(\d{1,4})\b/i);
+  return m ? (m[1].toUpperCase() + '-' + m[2]) : rpName(t);
+}
+function rpIsForCall(t, call) {
+  return !!t.lastCall && (t.lastCall === call.id || t.lastCall === String(call.callNum));
+}
+// Waiting on me: their message is the last one, and I haven't answered or marked it handled
+function rpAwaiting(t) {
+  return t && !t.lastFromMe && (t.lastAt || 0) > (t.handledAt || 0);
+}
+function awaitingForCall(call) {
+  var out = [];
+  Object.keys(rp.threads || {}).forEach(function(k) {
+    var t = rp.threads[k];
+    if (rpIsForCall(t, call) && rpAwaiting(t)) out.push({ k: k, t: t });
+  });
+  return out.sort(function(a, b) { return (a.t.lastAt || 0) - (b.t.lastAt || 0); });
+}
+function awaitingHtml(call) {
+  var list = awaitingForCall(call);
+  if (!list.length) return '';
+  return '<div class="await-list">' + list.map(function(a) {
+    var lastKey = '';
+    var msgs = (rp.all && rp.all[a.k]) || {};
+    Object.keys(msgs).forEach(function(mk) { if (!msgs[mk].fromMe && (!lastKey || msgs[mk].at > msgs[lastKey].at)) lastKey = mk; });
+    return '<div class="await-row"><i class="ti ti-hourglass"></i><div class="info"><b>' + escapeHtml(rpUnitLabel(a.t)) + ' awaiting reply</b>' +
+      '<span>' + (a.t.isGroup ? 'In group' : 'Private') + ' \u00B7 ' + escapeHtml(rpTimeAgo(a.t.lastAt || 0)) + ' \u00B7 \u201C' + escapeHtml(a.t.lastText || '') + '\u201D</span></div>' +
+      '<button type="button" class="rep" onclick="window.rpOpenThread(\'' + escapeHtml(a.k) + '\', \'' + escapeHtml(lastKey) + '\')">Reply</button>' +
+      '<button type="button" class="ok" title="Mark handled without replying" onclick="window.rpMarkHandled(\'' + escapeHtml(a.k) + '\')"><i class="ti ti-check"></i></button></div>';
+  }).join('') + '</div>';
+}
+window.rpMarkHandled = function(k) {
+  update(ref(db, 'waThreads/' + k), { handledAt: Date.now(), unread: 0 }).catch(function() {});
+};
 
 function callRepliesHtml(call) {
   var list = repliesForCall(call);
