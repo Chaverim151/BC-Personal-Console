@@ -413,6 +413,20 @@ window.isMeaningfullyDifferentPoiName = function(name, address) {
   .rp-send { background: #C8A532; color: #0F0E06; border: none; border-radius: 10px; width: 46px; height: 42px; font-size: 19px; cursor: pointer; flex-shrink: 0; }
   .rp-send:disabled { opacity: 0.5; cursor: wait; }
   .rp-hint { font-size: 11px; color: #9A8050; margin-top: 6px; }
+  .rp-call { display: inline-block; font-size: 10.5px; font-weight: 800; background: #0F0E06; color: #C8A532; border-radius: 5px; padding: 1px 6px; margin-bottom: 4px; }
+  .rp-thread .rp-call { margin: 0; }
+  .call-replies { margin-top: 10px; border: 1.5px solid #E0D4A0; background: #fff; border-radius: 10px; overflow: hidden; }
+  .call-replies-hdr { display: flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 800; color: #6B5515; background: #FDF6D8; padding: 6px 10px; }
+  .call-replies-hdr .ti { color: #C8A532; font-size: 15px; }
+  .call-replies-hdr .new { background: #B02800; color: #fff; border-radius: 8px; font-size: 10.5px; padding: 0 6px; }
+  .call-reply { display: flex; gap: 8px; align-items: flex-start; padding: 7px 10px; border-top: 1px solid #F0E8C8; cursor: pointer; }
+  .call-reply:hover { background: #FFFBEA; }
+  .call-reply .who { font-size: 12.5px; font-weight: 800; color: #0F0E06; }
+  .call-reply .who small { font-weight: 600; color: #9A8050; margin-left: 5px; }
+  .call-reply .txt { font-size: 13px; color: #3A3220; margin-top: 1px; white-space: pre-wrap; word-wrap: break-word; }
+  .call-reply .body { flex: 1; min-width: 0; }
+  .call-reply .go { font-size: 12px; font-weight: 700; color: #C8A532; white-space: nowrap; align-self: center; }
+  .call-replies-more { font-size: 12px; font-weight: 700; color: #6B5515; padding: 6px 10px; border-top: 1px solid #F0E8C8; cursor: pointer; text-align: center; }
   .keyup-calls { display: flex; flex-direction: column; gap: 8px; margin: 0.9rem 0 1rem; text-align: left; }
   .keyup-call { border: 2px solid #E0D4A0; background: #FFFEF5; border-radius: 12px; padding: 10px 12px; cursor: pointer; font-family: inherit; text-align: left; width: 100%; }
   .keyup-call:hover { border-color: #C8A532; }
@@ -3394,7 +3408,7 @@ window.dispatchWhatsApp = async function() {
   if (btn) { btn.disabled = true; btn.style.opacity = '0.6'; }
   showToast('Sending to Bergen County Chaverim Dispatch...');
 
-  var sent = await sendViaWaha(msg);
+  var sent = await sendViaWaha(msg, '', '', d.callNum ? fbKey(d.callNum) : '');
 
   if (btn) { btn.disabled = false; btn.style.opacity = ''; }
 
@@ -3460,11 +3474,12 @@ async function fillNextCallNumber() {
 // session "Personal_BC_Dispatch" and group 120363264369523011@g.us.
 const WAHA_PROXY_URL = 'https://bc-waha.shmueleidelman-work.workers.dev/send';
 
-async function sendViaWaha(text, replyTo, to) {
+async function sendViaWaha(text, replyTo, to, callId) {
   try {
     var payload = { text: text };
     if (replyTo) payload.reply_to = replyTo;
     if (to) payload.to = to;   // 'bc' (default) or 'interstate'
+    if (callId) payload.call = callId;   // so replies to this message attach to the call
     var resp = await fetch(WAHA_PROXY_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -3492,9 +3507,9 @@ function interstateZoneOk(zone) {
 
 // Sends a message to Interstate through WAHA. If WAHA fails, opens WhatsApp
 // with the message filled in instead, so the call still goes out.
-async function sendToInterstate(msg) {
+async function sendToInterstate(msg, callId) {
   showToast('Sending to Interstate...');
-  var sent = await sendViaWaha(msg, '', 'interstate');
+  var sent = await sendViaWaha(msg, '', 'interstate', callId);
   if (sent.ok) {
     showToast('\u2713 Sent to Interstate');
     return true;
@@ -3582,7 +3597,7 @@ async function postCallUpdate(call, text) {
   // If we don't have the original message to reply to, add the Call# and
   // location so the group still knows which call this is about.
   if (!call.waMessageId) text += '\n' + callLabel(call) + (call.location ? ' · ' + call.location : '');
-  var sent = await sendViaWaha(text, call.waMessageId || '');
+  var sent = await sendViaWaha(text, call.waMessageId || '', '', call.id);
   if (!sent.ok) {
     console.warn('WAHA update failed:', sent.error);
     showToast('WAHA failed (' + sent.error + ') — opening WhatsApp instead');
@@ -3720,7 +3735,7 @@ window.callSendInterstate = async function(id) {
     nature: call.nature || ''
   });
   setCardBusy(id, true);
-  await sendToInterstate(msg);
+  await sendToInterstate(msg, id);
   setCardBusy(id, false);
   try { await update(ref(db, 'activeCalls/' + id), { interstateAt: Date.now() }); } catch (e) {}
 };
@@ -3922,6 +3937,7 @@ function renderActiveCalls() {
         '</div>' +
         (call.lastPushAt ? '<div class="call-sent-int">\u2713 Pushed ' + (call.pushCount > 1 ? call.pushCount + '\u00D7, last ' : '') + escapeHtml(formatTime(call.lastPushAt)) + '</div>' : '') +
         (hasResp ? '' : autoPushRowHtml(call)) +
+        (typeof rp !== 'undefined' && rp ? callRepliesHtml(call) : '') +
         (call.interstateAt ? '<div class="call-sent-int">\u2713 Sent to Interstate ' + escapeHtml(formatTime(call.interstateAt)) + '</div>' : '') +
         '<div class="call-actions">' +
           '<button type="button" class="push-call-btn" onclick="window.callPush(\'' + id + '\')"><i class="ti ti-speakerphone"></i> Push call</button>' +
@@ -3939,15 +3955,12 @@ function renderActiveCalls() {
   if (focusedId) { var f = document.getElementById(focusedId); if (f) f.focus(); }
 }
 
-// Live updates — the board refreshes on its own whenever anything changes
-function startBoard() {
-
 // ── Replies panel ──
 // WAHA → Worker (/waha-webhook) saves replies to MY messages (group replies and
 // private replies) under waThreads / waMessages. One conversation per person:
 // "in group" (answers are sent to the group, quoting their message) or
 // "private" (answers go to them directly).
-var rp = { threads: {}, open: false, view: 'list', key: null, msgs: {}, unsub: null, quoteId: null, quoteText: '', lastUnread: null };
+var rp = { all: {}, quoteCall: '', threads: {}, open: false, view: 'list', key: null, msgs: {}, unsub: null, quoteId: null, quoteText: '', lastUnread: null };
 
 function rpTimeAgo(ms) {
   var d = new Date(ms), now = new Date();
@@ -3987,7 +4000,7 @@ onValue(ref(db, 'waThreads'), function(snap) {
   badge.textContent = unread; badge.style.display = unread ? '' : 'none';
   document.getElementById('repliesBtn').classList.toggle('has-new', unread > 0);
   if (rp.lastUnread !== null && unread > rp.lastUnread && newest) {
-    showToast('💬 ' + rpName(newest) + ': ' + (newest.lastText || '').slice(0, 60));
+    showToast('💬 ' + rpName(newest) + (newest.lastCall ? ' (' + rpCallLabel(newest.lastCall) + ')' : '') + ': ' + (newest.lastText || '').slice(0, 60));
     rpBeep();
   }
   rp.lastUnread = unread;
@@ -3997,6 +4010,51 @@ onValue(ref(db, 'waThreads'), function(snap) {
   }
   if (rp.open) rpRender();
 });
+
+// Every reply, so call cards can show the ones about them
+onValue(ref(db, 'waMessages'), function(snap) {
+  rp.all = snap.val() || {};
+  if (typeof renderActiveCalls === 'function') renderActiveCalls();
+});
+
+function rpCallLabel(callId) {
+  if (!callId) return '';
+  var c = (window._activeCalls || {})[callId];
+  return 'Call#' + ((c && c.callNum) || callId);
+}
+
+// Their replies about one call, newest first
+function repliesForCall(call) {
+  var out = [];
+  Object.keys(rp.all || {}).forEach(function(tk) {
+    var msgs = rp.all[tk] || {}, t = rp.threads[tk] || {};
+    Object.keys(msgs).forEach(function(mk) {
+      var m = msgs[mk];
+      if (m && !m.fromMe && m.call && (m.call === call.id || m.call === String(call.callNum))) out.push({ tk: tk, mk: mk, m: m, t: t });
+    });
+  });
+  return out.sort(function(a, b) { return (b.m.at || 0) - (a.m.at || 0); });
+}
+
+function callRepliesHtml(call) {
+  var list = repliesForCall(call);
+  if (!list.length) return '';
+  var unread = 0;
+  Object.keys(rp.threads).forEach(function(tk) {
+    var t = rp.threads[tk];
+    if (t.unread && (t.lastCall === call.id || t.lastCall === String(call.callNum))) unread += t.unread;
+  });
+  var shown = list.slice(0, 3);
+  return '<div class="call-replies"><div class="call-replies-hdr"><i class="ti ti-message-reply"></i> ' +
+    list.length + ' WhatsApp repl' + (list.length === 1 ? 'y' : 'ies') + (unread ? ' <span class="new">' + unread + ' new</span>' : '') + '</div>' +
+    shown.map(function(r) {
+      return '<div class="call-reply" onclick="window.rpOpenThread(\'' + escapeHtml(r.tk) + '\', \'' + escapeHtml(r.mk) + '\')" title="Open and reply">' +
+        '<div class="body"><div class="who">' + escapeHtml(rpName(r.t)) + '<small>' + (r.t.isGroup ? 'in group' : 'private') + ' \u00B7 ' + escapeHtml(rpTimeAgo(r.m.at || 0)) + '</small></div>' +
+        '<div class="txt">' + escapeHtml(r.m.text || '') + '</div></div><span class="go">Reply \u203A</span></div>';
+    }).join('') +
+    (list.length > 3 ? '<div class="call-replies-more" onclick="window.openReplies()">See all ' + list.length + ' in the Replies panel</div>' : '') +
+    '</div>';
+}
 
 window.openReplies = function() {
   rp.open = true;
@@ -4016,13 +4074,21 @@ function rpLeaveChat() {
 }
 window.rpBack = function() { rpLeaveChat(); rpRender(); };
 
-window.rpOpenThread = function(key) {
+window.rpOpenThread = function(key, quoteMsgKey) {
+  if (!rp.open) {
+    rp.open = true;
+    document.getElementById('rpPanel').classList.add('open');
+    document.getElementById('rpBackdrop').classList.add('open');
+  }
   rpLeaveChat();
   rp.view = 'chat'; rp.key = key;
   var t = rp.threads[key] || {};
   // Quote their latest message by default (in the group that shows who you're answering)
   rp.quoteId = t.isGroup ? (t.lastMsgId || null) : null;
   rp.quoteText = t.isGroup ? (t.lastText || '') : '';
+  rp.quoteCall = t.lastCall || '';
+  var qm = quoteMsgKey && rp.all[key] && rp.all[key][quoteMsgKey];
+  if (qm) { rp.quoteId = qm.msgId || null; rp.quoteText = qm.text || ''; rp.quoteCall = qm.call || rp.quoteCall; }
   rp.unsub = onValue(ref(db, 'waMessages/' + key), function(snap) {
     rp.msgs = snap.val() || {};
     rpRender();
@@ -4043,7 +4109,7 @@ window.rpDeleteThread = async function(key) {
 window.rpQuote = function(msgKey) {
   var m = rp.msgs[msgKey];
   if (!m || m.fromMe) return;
-  rp.quoteId = m.msgId || null; rp.quoteText = m.text || '';
+  rp.quoteId = m.msgId || null; rp.quoteText = m.text || ''; rp.quoteCall = m.call || rp.quoteCall;
   rpRender();
 };
 window.rpClearQuote = function() { rp.quoteId = null; rp.quoteText = ''; rpRender(); };
@@ -4059,6 +4125,8 @@ window.rpSend = async function() {
   try {
     var payload = { text: text, to: 'thread', thread: rp.key };
     if (rp.quoteId) payload.reply_to = rp.quoteId;
+    var callFor = rp.quoteCall || (rp.threads[rp.key] || {}).lastCall || '';
+    if (callFor) payload.call = String(callFor);
     var resp = await fetch(WAHA_PROXY_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
     var data = await resp.json().catch(function() { return null; });
     if (!resp.ok) { showToast('Not sent: ' + ((data && data.error) || ('HTTP ' + resp.status))); return; }
@@ -4089,6 +4157,7 @@ function rpRender() {
       var t = rp.threads[k];
       return '<button type="button" class="rp-thread' + (t.unread ? ' unread' : '') + '" onclick="window.rpOpenThread(\'' + escapeHtml(k) + '\')">' +
         '<div class="top"><span class="nm">' + escapeHtml(rpName(t)) + '</span>' +
+        (t.lastCall ? '<span class="rp-call">' + escapeHtml(rpCallLabel(t.lastCall)) + '</span>' : '') +
         '<span class="rp-tag ' + (t.isGroup ? 'g">In group' : 'p">Private') + '</span>' +
         '<span class="tm">' + escapeHtml(t.lastAt ? rpTimeAgo(t.lastAt) : '') + '</span></div>' +
         '<div class="pv">' + (t.lastFromMe ? 'You: ' : '') + escapeHtml(t.lastText || '') + '</div></button>';
@@ -4109,6 +4178,7 @@ function rpRender() {
     var sel = !m.fromMe && rp.quoteId && m.msgId === rp.quoteId;
     return '<div class="rp-msg ' + (m.fromMe ? 'me' : 'them') + (sel ? ' sel' : '') + '"' +
       (m.fromMe ? '' : ' onclick="window.rpQuote(\'' + escapeHtml(k) + '\')" title="Click to reply to this message"') + '>' +
+      (m.call && !m.fromMe ? '<span class="rp-call">' + escapeHtml(rpCallLabel(m.call)) + '</span><br>' : '') +
       (m.quoted ? '<div class="q">' + escapeHtml(m.quoted) + '</div>' : '') +
       escapeHtml(m.text || '') + '<div class="t">' + escapeHtml(m.at ? rpTimeAgo(m.at) : '') + '</div></div>';
   }).join('') || '<div class="rp-empty">Loading…</div>';
@@ -4122,6 +4192,9 @@ function rpRender() {
     : 'Sends privately to ' + rpName(t) + '.';
 }
 document.addEventListener('keydown', function(e) { if (e.key === 'Escape' && rp.open) window.closeReplies(); });
+
+// Live updates — the board refreshes on its own whenever anything changes
+function startBoard() {
 
 onValue(ref(db, 'activeCalls'), function(snap) {
   window._activeCalls = snap.exists() ? snap.val() : {};
