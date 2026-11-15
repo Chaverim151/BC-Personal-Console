@@ -3553,12 +3553,33 @@ var UNIT_ROLES = {
   observing:  { reply: 'Observing',  board: 'observing' }
 };
 
+// Cleans up what was typed in the unit box:
+//   "bc-32 backing up" -> BC-32 (and the role becomes Backing Up)
+//   "18" / "bc18" / "BC 18" -> BC-18
+function normalizeUnitEntry(raw) {
+  var t = String(raw || '').toUpperCase().replace(/\s+/g, ' ').trim();
+  var role = null;
+  if (/\bBACK(ING)?[\s-]*UP\b|\bB\/U\b/.test(t)) role = 'backup';
+  else if (/\bOBSERV(ING|ER|E)?\b/.test(t)) role = 'observing';
+  else if (/\bRESPOND(ING|S)?\b|\bEN[\s-]?ROUTE\b/.test(t)) role = 'responding';
+  var cleaned = t.replace(/\bBACK(ING)?[\s-]*UP\b|\bB\/U\b|\bOBSERV(ING|ER|E)?\b|\bRESPOND(ING|S)?\b|\bEN[\s-]?ROUTE\b|\bIS\b/g, ' ')
+    .replace(/\s+/g, ' ').replace(/^[\s\-:,]+|[\s\-:,]+$/g, '');
+  var unit;
+  var m = cleaned.match(/\b([A-Z]{1,4})\s*-?\s*(\d{1,4})\b/);
+  if (m) unit = m[1] + '-' + m[2];
+  else if (/^\d{1,4}$/.test(cleaned)) unit = 'BC-' + cleaned;   // bare number = Bergen unit
+  else unit = cleaned;
+  return { unit: unit, role: role };
+}
+
 window.callAddUnit = async function(id, role, unitFromPrompt) {
   if (!UNIT_ROLES[role]) role = 'responding';
   var call = window._activeCalls[id];
   if (!call) return;
   var input = unitFromPrompt ? null : document.getElementById('unitInput_' + id);
-  var unit = unitFromPrompt ? String(unitFromPrompt).trim().toUpperCase() : (input ? input.value.trim().toUpperCase() : '');
+  var entry = normalizeUnitEntry(unitFromPrompt ? unitFromPrompt : (input ? input.value : ''));
+  var unit = entry.unit;
+  if (entry.role) role = entry.role;   // typed "backing up" etc. wins over the button
   if (!unit) { showToast('Type a unit number first'); if (input) input.focus(); return; }
 
   var key = fbKey(unit);
@@ -3781,6 +3802,7 @@ onValue(ref(db, 'knownUnits'), function(snap) {
   var dl = document.getElementById('knownUnitsList');
   if (!dl) return;
   var units = snap.exists() ? Object.values(snap.val()) : [];
+  units = units.filter(function(u) { return /^[A-Z]{1,4}-\d{1,4}$/.test(String(u)); });   // hide typos like "BC-32 BACKING UP"
   units.sort();
   dl.innerHTML = units.map(function(u) { return '<option value="' + escapeHtml(u) + '"></option>'; }).join('');
 });
