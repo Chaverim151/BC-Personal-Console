@@ -373,6 +373,35 @@ window.isMeaningfullyDifferentPoiName = function(name, address) {
 
   /* ── Zello key-up popup ── */
   .keyup-modal { max-width: 440px; width: 100%; }
+  /* ── Send to another area ── */
+  .fwd-modal { max-width: 480px; }
+  .fwd-modal .modal-body { text-align: left; max-height: calc(100vh - 140px); overflow-y: auto; }
+  .fwd-lbl { font-size: 11.5px; font-weight: 800; color: #9A8050; text-transform: uppercase; letter-spacing: .5px; margin: 2px 0 6px; }
+  .fwd-dests { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+  .fwd-dest { display: flex; align-items: center; gap: 10px; border: 2px solid #E0D4A0; background: #FFFEF5; border-radius: 11px; padding: 9px 11px; cursor: pointer; font-family: inherit; text-align: left; width: 100%; }
+  .fwd-dest:hover { border-color: #C8A532; }
+  .fwd-dest.sel { border-color: #0F0E06; background: #FDF6D8; box-shadow: 0 0 0 2px rgba(200,165,50,0.35); }
+  .fwd-dest .ti { font-size: 18px; color: #C8A532; }
+  .fwd-dest .t { flex: 1; min-width: 0; }
+  .fwd-dest b { display: block; font-size: 14px; color: #0F0E06; }
+  .fwd-dest span { display: block; font-size: 12px; color: #6B5515; }
+  .fwd-dest .sug { font-size: 10.5px; font-weight: 800; background: #2E7D32; color: #fff; border-radius: 5px; padding: 1px 6px; }
+  .fwd-dest .del { background: none; border: none; color: #B8A877; font-size: 16px; cursor: pointer; padding: 2px 4px; }
+  .fwd-dest .del:hover { color: #B02800; }
+  .fwd-other { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+  .fwd-other input { font-size: 14px; padding: 9px 11px; }
+  .fwd-save { display: flex; align-items: center; gap: 7px; font-size: 13px; color: #6B5515; font-weight: 600; margin-top: 8px; cursor: pointer; }
+  .fwd-save input { width: 16px; height: 16px; margin: 0; accent-color: #C8A532; }
+  .fwd-msg { width: 100%; min-height: 170px; font-size: 13px; font-family: ui-monospace, Menlo, monospace; line-height: 1.45; padding: 10px 12px; border-radius: 10px; resize: vertical; }
+  .fwd-err { color: #B02800; font-size: 13px; font-weight: 600; margin-top: 8px; }
+  .fwd-btns { display: grid; grid-template-columns: 2fr 1fr; gap: 8px; margin-top: 12px; }
+  .fwd-btns .modal-btn-ignore:disabled { opacity: .55; cursor: wait; }
+  .fwd-call-btn { width: 100%; border: 1.5px dashed #C8A532; background: #FFFEF5; color: #6B5515; border-radius: 10px; padding: 9px; font-size: 13.5px; font-weight: 700; cursor: pointer; font-family: inherit; display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 8px; }
+  .fwd-call-btn:hover { background: #FDF6D8; }
+  .fwd-call-btn.hot { border-style: solid; background: #2E7D32; color: #fff; border-color: #2E7D32; }
+  .fwd-out { display: flex; align-items: center; gap: 8px; background: #EAF4EA; border: 1.5px solid #8FBF8F; border-radius: 10px; padding: 7px 10px; font-size: 13px; color: #1E5A20; font-weight: 600; margin-bottom: 10px; }
+  .btn-fwd { background: #FFFEF5; color: #6B5515; border: 1.5px dashed #C8A532; }
+  .btn-fwd:hover { background: #FDF6D8; }
   /* ── Login ── */
   .login-screen { position: fixed; inset: 0; z-index: 5000; background: radial-gradient(circle at 50% 30%, #2A2510 0%, #0F0E06 70%); display: flex; align-items: center; justify-content: center; padding: 20px; }
   .login-card { background: #FFFEF5; border-radius: 18px; border-top: 4px solid #C8A532; box-shadow: 0 20px 60px rgba(0,0,0,0.5); padding: 32px 30px 24px; width: 100%; max-width: 360px; text-align: center; }
@@ -641,6 +670,25 @@ window.isMeaningfullyDifferentPoiName = function(name, address) {
 
 <!-- Zello two-way radio: listens to the picked channel, hold to talk -->
 <!-- Zello key-up popup: "BC-12 keyed up — add to a call?" -->
+<div class="modal-overlay" id="fwdModal">
+  <div class="modal fwd-modal">
+    <div class="modal-hdr">
+      <i class="ti ti-share-3" style="color:#C8A532;"></i>
+      <div class="modal-hdr-txt" id="fwdTitle">Send to another area</div>
+    </div>
+    <div class="modal-body">
+      <div class="fwd-lbl">Send to</div>
+      <div class="fwd-dests" id="fwdDests"></div>
+      <div class="fwd-lbl">Message (you can edit it)</div>
+      <textarea class="fwd-msg" id="fwdMsg"></textarea>
+      <div class="fwd-err" id="fwdErr" style="display:none"></div>
+      <div class="fwd-btns">
+        <button type="button" class="modal-btn modal-btn-ignore" id="fwdSendBtn" onclick="window.fwdSend()"><i class="ti ti-brand-whatsapp"></i> Send on WhatsApp</button>
+        <button type="button" class="modal-btn modal-btn-no" onclick="window.closeForward()">Cancel</button>
+      </div>
+    </div>
+  </div>
+</div>
 <div class="modal-overlay" id="keyupModal">
   <div class="modal keyup-modal">
     <div class="modal-hdr">
@@ -973,6 +1021,7 @@ window.isMeaningfullyDifferentPoiName = function(name, address) {
       <div class="actions">
         <button class="btn btn-wa" id="dispatchWaBtn" onclick="window.dispatchWhatsApp()"><i class="ti ti-message-circle"></i> Dispatch to BC Group</button>
         <button class="btn btn-int" id="dispatchIntBtn" onclick="window.dispatchInterstate()"><i class="ti ti-car"></i> Dispatch to Interstate</button>
+        <button class="btn btn-fwd" id="forwardFormBtn" onclick="window.openForwardForm()"><i class="ti ti-share-3"></i> Send to another area</button>
         <button class="btn btn-copy" onclick="window.copyMessage()"><i class="ti ti-copy"></i> Copy Message</button>
       </div>
     </div>
@@ -3503,6 +3552,11 @@ window.showOutsideZoneModal = function() {
           window.dismissDispatchModal();
           window.dispatchInterstate();
         } },
+      { label: 'Send to another area', className: 'modal-btn-no', icon: 'ti-share-3', onClick: function() {
+          window.applyQuickFillFields(missing);
+          window.dismissDispatchModal();
+          window.openForwardForm();
+        } },
       { label: 'Ignore', className: 'modal-btn-no', onClick: window.dismissDispatchModal }
     ]
   });
@@ -4077,6 +4131,7 @@ function renderActiveCalls() {
       '</div>' +
       '<div class="call-card-body">' +
         awaitHtml +
+        outsideBannerHtml(call) +
         (call.lockedInside ? '<div class="call-line" style="color:#B02800;font-weight:700;">' + escapeHtml(call.lockedInside.toUpperCase()) + '</div>' : '') +
         '<div class="call-line"><b>Nature:</b> ' + escapeHtml(call.nature || '—') + '</div>' +
         neededEquipHtml(callNatureKey(call), call.lat, call.lng, { needsEz: !!call.needsEz, ezSizes: call.ezSizes || null }) +
@@ -4094,12 +4149,14 @@ function renderActiveCalls() {
         (call.lastPushAt ? '<div class="call-sent-int">\u2713 Pushed ' + (call.pushCount > 1 ? call.pushCount + '\u00D7, last ' : '') + escapeHtml(formatTime(call.lastPushAt)) + '</div>' : '') +
         (hasResp ? '' : autoPushRowHtml(call)) +
         (typeof rp !== 'undefined' && rp ? callRepliesHtml(call) : '') +
+        forwardsHtml(call) +
         (call.interstateAt ? '<div class="call-sent-int">\u2713 Sent to Interstate ' + escapeHtml(formatTime(call.interstateAt)) + '</div>' : '') +
         '<div class="call-actions">' +
           '<button type="button" class="push-call-btn" onclick="window.callPush(\'' + id + '\')"><i class="ti ti-speakerphone"></i> Push call</button>' +
           '<button type="button" class="int-call-btn" onclick="window.callSendInterstate(\'' + id + '\')"><i class="ti ti-car"></i> Send to Interstate</button>' +
           '<button type="button" class="clear-call-btn" onclick="window.callClear(\'' + id + '\')"><i class="ti ti-circle-check"></i> Clear call</button>' +
         '</div>' +
+        '<button type="button" class="fwd-call-btn' + (callIsOutside(call) ? ' hot' : '') + '" onclick="window.openForward(\'' + id + '\')"><i class="ti ti-share-3"></i> Send to another area</button>' +
       '</div>' +
     '</div>';
   }).join('');
@@ -4385,6 +4442,181 @@ function rpRender() {
     : 'Sends privately to ' + rpName(t) + '.';
 }
 document.addEventListener('keydown', function(e) { if (e.key === 'Escape' && rp.open) window.closeReplies(); });
+
+
+// ── Send a call to another area (their WhatsApp, or any number) ──
+var fwd = { open: false, d: null, callId: null, chapter: null, contacts: {}, sel: null };
+onValue(ref(db, 'forwardContacts'), function(snap) {
+  fwd.contacts = snap.val() || {};
+  if (fwd.open) fwdRenderDests();
+});
+
+function fwdPhoneFmt(p) {
+  var d = String(p || '').replace(/\D/g, '');
+  if (d.length === 11 && d[0] === '1') d = d.slice(1);
+  return d.length === 10 ? '(' + d.slice(0, 3) + ') ' + d.slice(3, 6) + '-' + d.slice(6) : String(p || '');
+}
+function callIsOutside(call) {
+  return window.getZone && window.getZone(call.lat, call.lng) === 'outside';
+}
+function chapterFor(lat, lng) {
+  if (lat == null || lng == null || lat === '' || !window.getOtherChapterInfo) return null;
+  try { return window.getOtherChapterInfo(parseFloat(lat), parseFloat(lng)); } catch (e) { return null; }
+}
+function outsideBannerHtml(call) {
+  if (!callIsOutside(call)) return '';
+  var ch = chapterFor(call.lat, call.lng);
+  return '<div class="fwd-out"><i class="ti ti-map-pin-share"></i> Outside Bergen’s coverage' +
+    (ch ? ' — this is ' + escapeHtml(ch.name) + '’s area' : '') + '</div>';
+}
+function forwardsHtml(call) {
+  if (!call.forwards) return '';
+  return Object.keys(call.forwards).sort().map(function(k) {
+    var f = call.forwards[k];
+    return '<div class="call-sent-int">✓ Sent to ' + escapeHtml(f.name || fwdPhoneFmt(f.to)) + ' ' + escapeHtml(formatTime(f.at)) + '</div>';
+  }).join('');
+}
+function callToData(call) {
+  return {
+    urgent: !!call.urgent, lockedInside: call.lockedInside || '',
+    ezLines: Array.isArray(call.ezLines) ? call.ezLines : [],
+    poiName: call.poiName || '', location: call.location || '',
+    lat: call.lat || null, lng: call.lng || null,
+    phone: call.phone || '', name: call.name || '', nature: call.nature || '', callNum: call.callNum || ''
+  };
+}
+
+function buildForward(d, chapter) {
+  var lines = [];
+  var locked = d.lockedInside != null ? d.lockedInside : window.lockedInsideNote;
+  if (d.urgent) lines.push('*URGENT*');
+  if (locked) lines.push('*' + locked.toUpperCase() + '*');
+  lines.push('*Call referred by Chaverim Bergen County*');
+  if (chapter) lines.push('(This location is in ' + chapter.name + '’s area)');
+  lines.push('');
+  if (d.poiName) lines.push(d.poiName);
+  lines.push('Location: ' + (d.location || ''));
+  appendMapsLinks(lines, d);
+  lines.push('');
+  if (d.phone) lines.push('Phone: ' + d.phone);
+  if (d.name) lines.push('Name: ' + d.name);
+  lines.push('Nature: ' + (d.nature || ''));
+  var ez = d.ezLines != null ? d.ezLines : buildEzSpareLines();
+  if (ez && ez.length) { lines.push(''); ez.forEach(function(l) { lines.push(l); }); }
+  lines.push('');
+  lines.push('Please reply to let us know if you can take this call. Thank you!');
+  return lines.join('\n');
+}
+
+function fwdOpenWith(d, callId) {
+  fwd.d = d; fwd.callId = callId || null;
+  fwd.chapter = chapterFor(d.lat, d.lng);
+  fwd.sel = fwd.chapter ? { kind: 'suggested' } : null;
+  document.getElementById('fwdTitle').textContent = 'Send to another area' + (d.callNum && callId ? ' — Call#' + d.callNum : '');
+  document.getElementById('fwdMsg').value = buildForward(d, fwd.chapter);
+  document.getElementById('fwdErr').style.display = 'none';
+  fwd.open = true;
+  fwdRenderDests();
+  document.getElementById('fwdModal').classList.add('on');
+}
+window.openForward = function(callId) {
+  var call = window._activeCalls[callId];
+  if (call) fwdOpenWith(callToData(call), callId);
+};
+window.openForwardForm = function() {
+  var d = getFormData();
+  if (!d.location) { showToast('Enter the location first'); return; }
+  fwdOpenWith(d, null);
+};
+window.closeForward = function() {
+  fwd.open = false;
+  document.getElementById('fwdModal').classList.remove('on');
+};
+
+function fwdRenderDests() {
+  var box = document.getElementById('fwdDests');
+  var html = '';
+  var sel = fwd.sel || {};
+  if (fwd.chapter && fwd.chapter.phone) {
+    html += '<button type="button" class="fwd-dest' + (sel.kind === 'suggested' ? ' sel' : '') + '" onclick="window.fwdPick(\'suggested\')">' +
+      '<i class="ti ti-map-pin-check"></i><div class="t"><b>' + escapeHtml(fwd.chapter.name) + ' <span class="sug" style="display:inline">This area</span></b>' +
+      '<span>' + escapeHtml(fwd.chapter.phone) + ' · their hotline number</span></div></button>';
+  }
+  var keys = Object.keys(fwd.contacts).sort(function(a, b) { return (fwd.contacts[b].lastUsed || 0) - (fwd.contacts[a].lastUsed || 0); });
+  keys.forEach(function(k) {
+    var c = fwd.contacts[k];
+    html += '<div role="button" tabindex="0" class="fwd-dest' + (sel.kind === 'saved' && sel.key === k ? ' sel' : '') + '" onclick="window.fwdPick(\'saved\', \'' + escapeHtml(k) + '\')">' +
+      '<i class="ti ti-' + (c.chatId ? 'users-group' : 'user') + '"></i><div class="t"><b>' + escapeHtml(c.name || 'Saved contact') + '</b>' +
+      '<span>' + escapeHtml(c.chatId ? 'WhatsApp group' : fwdPhoneFmt(c.phone)) + '</span></div>' +
+      '<button type="button" class="del" title="Remove from saved" onclick="event.stopPropagation(); window.fwdDeleteContact(\'' + escapeHtml(k) + '\')"><i class="ti ti-x"></i></button></div>';
+  });
+  html += '<button type="button" class="fwd-dest' + (sel.kind === 'other' ? ' sel' : '') + '" onclick="window.fwdPick(\'other\')">' +
+    '<i class="ti ti-dialpad"></i><div class="t"><b>Another number</b><span>Type any WhatsApp number</span></div></button>';
+  if (sel.kind === 'other') {
+    html += '<div class="fwd-other"><input type="tel" id="fwdPhone" placeholder="Phone (e.g. 973-555-1234)" value="' + escapeHtml(fwd.otherPhone || '') + '" oninput="window._fwdOther(this)" />' +
+      '<input type="text" id="fwdName" placeholder="Name (e.g. Passaic dispatch)" value="' + escapeHtml(fwd.otherName || '') + '" oninput="window._fwdOther(this)" /></div>' +
+      '<label class="fwd-save"><input type="checkbox" id="fwdSaveChk"' + (fwd.saveOther !== false ? ' checked' : '') + ' onchange="window._fwdOther(this)"> Save this number for next time</label>';
+  }
+  box.innerHTML = html;
+  if (sel.kind === 'other') { var ph = document.getElementById('fwdPhone'); if (ph && !fwd.otherPhone) ph.focus(); }
+}
+window._fwdOther = function(el) {
+  if (el.id === 'fwdPhone') fwd.otherPhone = el.value;
+  else if (el.id === 'fwdName') fwd.otherName = el.value;
+  else if (el.id === 'fwdSaveChk') fwd.saveOther = el.checked;
+};
+window.fwdPick = function(kind, key) {
+  fwd.sel = { kind: kind, key: key };
+  document.getElementById('fwdErr').style.display = 'none';
+  fwdRenderDests();
+};
+window.fwdDeleteContact = async function(k) {
+  var c = fwd.contacts[k];
+  if (!c || !confirm('Remove ' + (c.name || 'this contact') + ' from your saved list?')) return;
+  if (fwd.sel && fwd.sel.key === k) fwd.sel = null;
+  try { await remove(ref(db, 'forwardContacts/' + k)); } catch (e) {}
+};
+
+window.fwdSend = async function() {
+  var err = document.getElementById('fwdErr'), btn = document.getElementById('fwdSendBtn');
+  function fail(m) { err.textContent = m; err.style.display = ''; }
+  var text = document.getElementById('fwdMsg').value.trim();
+  var sel = fwd.sel;
+  if (!sel) return fail('Choose who to send it to.');
+  if (!text) return fail('The message is empty.');
+  var payload = { text: text }, name = '', saveKey = null, saveRec = null;
+  if (sel.kind === 'suggested') {
+    payload.to = 'phone'; payload.phone = fwd.chapter.phone; name = fwd.chapter.name;
+  } else if (sel.kind === 'saved') {
+    var c = fwd.contacts[sel.key];
+    if (!c) return fail('That contact was removed.');
+    if (c.chatId) { payload.to = 'chat'; payload.chatId = c.chatId; } else { payload.to = 'phone'; payload.phone = c.phone; }
+    name = c.name || '';
+    saveKey = sel.key;
+  } else {
+    var digits = String(fwd.otherPhone || '').replace(/\D/g, '');
+    if (digits.length < 10) return fail('Enter the full phone number, with area code.');
+    payload.to = 'phone'; payload.phone = digits; name = (fwd.otherName || '').trim();
+    if (fwd.saveOther !== false) { saveKey = 'p' + digits; saveRec = { name: name || fwdPhoneFmt(digits), phone: digits }; }
+  }
+  if (fwd.callId) payload.call = fwd.callId;
+  btn.disabled = true;
+  try {
+    var resp = await bcFetch(WAHA_PROXY_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    var data = await resp.json().catch(function() { return null; });
+    if (!resp.ok) return fail('Not sent: ' + ((data && data.error) || ('HTTP ' + resp.status)));
+    var now = Date.now(), upd = {};
+    if (fwd.callId) upd['activeCalls/' + fwd.callId + '/forwards/' + now] = { name: name || fwdPhoneFmt(payload.phone), to: payload.phone || payload.chatId, at: now };
+    if (saveRec) { saveRec.lastUsed = now; upd['forwardContacts/' + saveKey] = saveRec; }
+    else if (saveKey) upd['forwardContacts/' + saveKey + '/lastUsed'] = now;
+    if (Object.keys(upd).length) { try { await update(ref(db), upd); } catch (e) {} }
+    fwd.otherPhone = ''; fwd.otherName = '';
+    window.closeForward();
+    showToast('✓ Sent to ' + (name || fwdPhoneFmt(payload.phone)) + ' — their reply will show in Replies');
+  } catch (e) {
+    fail('Not sent — could not reach the relay.');
+  } finally { btn.disabled = false; }
+};
 
 // ── Recently cleared calls (reopen one back onto the board) ──
 var clearedOpen = false, clearedItems = {};
