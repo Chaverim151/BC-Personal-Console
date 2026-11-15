@@ -1714,12 +1714,12 @@ window.onVehicleTrimChange = async function() {
 
   resultEl.innerHTML =
     '<div style="font-weight:700;color:#C8A532;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">EZ Spare Options</div>' +
-    '<div>Preferred: <strong>' + (spec.size_1 || 'N/A') + '</strong>' + (spec.kit ? ' (' + spec.kit + ')' : '') + '</div>' +
-    '<div>Secondary: <strong>' + (spec.size_2 || 'N/A') + '</strong>' + (spec.size_2_pn ? ' (' + spec.size_2_pn + ')' : '') + '</div>' +
+    '<div>Preferred: <strong>' + escapeHtml(spec.size_1 || 'N/A') + '</strong>' + (spec.kit ? ' (' + escapeHtml(spec.kit) + ')' : '') + '</div>' +
+    '<div>Secondary: <strong>' + escapeHtml(spec.size_2 || 'N/A') + '</strong>' + (spec.size_2_pn ? ' (' + escapeHtml(spec.size_2_pn) + ')' : '') + '</div>' +
     '<div style="font-weight:700;color:#C8A532;text-transform:uppercase;letter-spacing:0.5px;margin:12px 0 6px;">Hardware for EZ Spare</div>' +
-    '<div>EFS Adapter: <strong>' + (spec.efs_adapter || 'Direct Fit') + ' - ' + (spec.pattern || '') + '</strong>' + (spec.efs_pn ? ' (' + spec.efs_pn + ')' : '') + '</div>' +
-    '<div>' + (spec.lug_type || 'Nut') + ': <strong>' + (spec.lug_thread || 'N/A') + '</strong>' + (spec.lug_pn ? ' (' + spec.lug_pn + ')' : '') + '</div>' +
-    '<div>Hub Ring: <strong>' + (spec.hub_ring || 'Direct Fit') + '</strong>' + (spec.hub_ring_pn ? ' (' + spec.hub_ring_pn + ')' : '') + '</div>';
+    '<div>EFS Adapter: <strong>' + escapeHtml(spec.efs_adapter || 'Direct Fit') + ' - ' + escapeHtml(spec.pattern || '') + '</strong>' + (spec.efs_pn ? ' (' + escapeHtml(spec.efs_pn) + ')' : '') + '</div>' +
+    '<div>' + escapeHtml(spec.lug_type || 'Nut') + ': <strong>' + escapeHtml(spec.lug_thread || 'N/A') + '</strong>' + (spec.lug_pn ? ' (' + escapeHtml(spec.lug_pn) + ')' : '') + '</div>' +
+    '<div>Hub Ring: <strong>' + escapeHtml(spec.hub_ring || 'Direct Fit') + '</strong>' + (spec.hub_ring_pn ? ' (' + escapeHtml(spec.hub_ring_pn) + ')' : '') + '</div>';
 };
 
 // Formats the fetched spec into plain-text lines for the dispatch messages,
@@ -2058,7 +2058,7 @@ function buildDesktopColorMenu(colors) {
     var border = (color==='White'||color==='Beige'||color==='Silver') ? '#CCC' : 'rgba(0,0,0,0.12)';
     opt.innerHTML =
       '<span class="color-dot" style="background:' + c + ';border-color:' + border + ';' + (!COLOR_MAP[color] ? 'display:none;' : '') + '"></span>' +
-      color;
+      escapeHtml(color);
     opt.addEventListener('click', function() { window.selectDesktopColor(color); });
     menu.appendChild(opt);
   });
@@ -2149,7 +2149,7 @@ window.openColorPicker = function() {
     btn.style.cssText = 'display:flex;align-items:center;gap:10px;width:100%;padding:10px 12px;border:none;background:transparent;font-size:15px;color:#1A1400;font-family:inherit;cursor:pointer;border-radius:8px;text-align:left;';
     var cssColor = COLOR_MAP[color] || '#999';
     var border = (color==='White'||color==='Beige'||color==='Silver') ? '#CCC' : cssColor;
-    btn.innerHTML = '<span style="width:18px;height:18px;border-radius:50%;background:' + cssColor + ';border:1.5px solid ' + border + ';flex-shrink:0;"></span>' + color;
+    btn.innerHTML = '<span style="width:18px;height:18px;border-radius:50%;background:' + cssColor + ';border:1.5px solid ' + border + ';flex-shrink:0;"></span>' + escapeHtml(color);
     btn.addEventListener('click', function() {
       window.setColor(color);
       overlay.style.display = 'none';
