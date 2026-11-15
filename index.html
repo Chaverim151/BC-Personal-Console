@@ -4213,7 +4213,10 @@ function rpBeep() {
 }
 
 onValue(ref(db, 'waThreads'), function(snap) {
-  rp.threads = snap.val() || {};
+  // Only conversations about a call (older non-call chats are hidden)
+  var all = snap.val() || {};
+  rp.threads = {};
+  Object.keys(all).forEach(function(k) { if (all[k] && all[k].lastCall) rp.threads[k] = all[k]; });
   var unread = 0, newest = null;
   Object.keys(rp.threads).forEach(function(k) {
     var t = rp.threads[k];
@@ -4412,7 +4415,7 @@ function rpRender() {
     body.className = 'rp-list';
     var keys = Object.keys(rp.threads).sort(function(a, b) { return (rp.threads[b].lastAt || 0) - (rp.threads[a].lastAt || 0); });
     if (!keys.length) {
-      body.innerHTML = '<div class="rp-empty"><i class="ti ti-messages" style="font-size:34px;color:#C8A532"></i><br>No replies yet.<br>When someone replies to one of your messages — in the group or privately — it shows up here.</div>';
+      body.innerHTML = '<div class="rp-empty"><i class="ti ti-messages" style="font-size:34px;color:#C8A532"></i><br>No replies yet.<br>When someone replies to one of your call messages \u2014 in the group or privately \u2014 it shows up here.</div>';
       return;
     }
     body.innerHTML = keys.map(function(k) {
