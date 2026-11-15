@@ -831,6 +831,11 @@ window.isMeaningfullyDifferentPoiName = function(name, address) {
           <input type="text" id="callerName" placeholder="John Doe" />
           <button class="field-clear" onclick="window.clearField('callerName')" tabindex="-1">&times;</button>
         </div>
+        <div id="liveNameBanner" class="live-call-banner" style="display:none;">
+          <i class="ti ti-id-badge-2"></i>
+          <span>Caller ID: <b id="liveNameText"></b></span>
+          <button onclick="window.fillNameFromCallerId()" class="use-call-btn">Use this name</button>
+        </div>
       </div>
 
       <!-- Nature of call -->
@@ -1804,6 +1809,55 @@ function buildEzSpareLines() {
 const TELZIO_PROXY_URL = 'https://cobc.shmueleidelman-work.workers.dev/proxy';
 var telzioInterval = null;
 var lastLiveCallFrom = null;
+var lastLiveCallName = null;
+var cnamCache = {};   // CallUUID -> caller ID name ('' if none)
+
+// Turn a carrier caller-ID name into something usable, or '' if it's junk
+// ("WIRELESS CALLER", "TEANECK NJ", "UNAVAILABLE", a phone number…)
+function cleanCnam(raw) {
+  var n = String(raw || '').replace(/\s+/g, ' ').trim();
+  if (!n || n.length < 2) return '';
+  if (/\d{3}/.test(n)) return '';
+  if (/^(wireless|cell|mobile)?\s*(caller|phone)$|unknown|unavailable|private|restricted|anonymous|out of area|no caller|^v\d|toll free/i.test(n)) return '';
+  if (/^[A-Z .'-]+ [A-Z]{2}$/.test(n)) return '';           // "TEANECK NJ" = city, not a person
+  if (n === n.toUpperCase()) {                               // "COHEN ZACHARY" -> "Cohen Zachary"
+    n = n.toLowerCase().replace(/(^|[\s'-])([a-z])/g, function(m, a, b) { return a + b.toUpperCase(); });
+  }
+  return n;
+}
+
+async function lookupCnam(call) {
+  if (!call || !call.CallUUID) return '';
+  if (call.FromCnam != null) return cleanCnam(call.FromCnam);
+  if (cnamCache[call.CallUUID] !== undefined) return cnamCache[call.CallUUID];
+  cnamCache[call.CallUUID] = '';   // don't ask twice while waiting
+  try {
+    var r = await fetch(TELZIO_PROXY_URL + '/calls/details/' + encodeURIComponent(call.CallUUID));
+    if (r.ok) {
+      var det = await r.json();
+      cnamCache[call.CallUUID] = cleanCnam(det && (det.FromCnam || det.fromCnam));
+    }
+  } catch (e) {}
+  return cnamCache[call.CallUUID];
+}
+
+function showNameSuggestion(name) {
+  var banner = document.getElementById('liveNameBanner');
+  if (!banner) return;
+  var current = document.getElementById('callerName').value.trim();
+  if (name && current.toLowerCase() !== name.toLowerCase()) {
+    document.getElementById('liveNameText').textContent = name;
+    banner.style.display = 'flex';
+  } else {
+    banner.style.display = 'none';
+  }
+}
+window.fillNameFromCallerId = function() {
+  if (!lastLiveCallName) return;
+  document.getElementById('callerName').value = lastLiveCallName;
+  document.getElementById('liveNameBanner').style.display = 'none';
+  showToast('\u2713 Name filled from caller ID');
+};
 
 var telzioPollInFlight = false;
 async function pollTelzioLiveCalls() {
@@ -1838,8 +1892,13 @@ async function pollTelzioLiveCalls() {
         numEl.textContent = formatted;
         banner.style.display = 'flex';
       }
+      // Caller ID name — same rules: suggest it, don't overwrite what you typed
+      lastLiveCallName = await lookupCnam(call);
+      showNameSuggestion(lastLiveCallName);
     } else {
       lastLiveCallFrom = null;
+      lastLiveCallName = null;
+      showNameSuggestion('');
       statusEl.textContent = '';
       statusEl.className = 'telzio-status';
       banner.style.display = 'none';
@@ -1891,6 +1950,9 @@ window.pullLastCall = async function() {
     var formatted = formatPhone(from);
     document.getElementById('phone').value = formatted;
     showToast('\u2713 Last call: ' + formatted);
+    // Caller ID name for that call — suggest it under Caller name
+    var nm = await lookupCnam(call);
+    if (nm) { lastLiveCallName = nm; showNameSuggestion(nm); }
   } catch(e) {
     showToast('Error: ' + e.message);
     console.warn('pullLastCall error:', e);
@@ -1902,6 +1964,7 @@ window.fillFromLiveCall = function() {
     document.getElementById('phone').value = lastLiveCallFrom;
     document.getElementById('liveCallBanner').style.display = 'none';
     showToast('\u2713 Phone filled from live call');
+    showNameSuggestion(lastLiveCallName);
   }
 };
 
