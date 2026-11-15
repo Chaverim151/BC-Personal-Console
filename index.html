@@ -208,6 +208,8 @@ window.isMeaningfullyDifferentPoiName = function(name, address) {
   .call-pill { display: inline-flex; align-items: center; gap: 5px; margin-left: 8px; padding: 3px 10px 3px 8px; border-radius: 999px; background: #2F8FDB; color: #05121F; font-weight: 700; font-size: 11px; text-decoration: none; white-space: nowrap; transition: background 0.15s; }
   .call-pill:hover { background: #55A6E8; }
   .call-pill i { font-size: 13px; }
+  .fwd-pill { border: none; cursor: pointer; font-family: inherit; background: #25D366; color: #052E16; }
+  .fwd-pill:hover { background: #4BE07F; }
 
   /* ── Section subheader ── */
   .sub-hdr { display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 600; color: #8B6E1A; letter-spacing: 1.5px; text-transform: uppercase; margin: 1.2rem 0 0.9rem; }
@@ -808,6 +810,9 @@ window.isMeaningfullyDifferentPoiName = function(name, address) {
           <a id="zoneCallPill" class="call-pill" href="#" style="display:none;" onclick="event.stopPropagation();">
             <i class="ti ti-phone-outgoing"></i><span id="zoneCallPillText"></span>
           </a>
+          <button type="button" id="zoneFwdPill" class="call-pill fwd-pill" style="display:none;" onclick="event.stopPropagation(); window.openForwardForm();">
+            <i class="ti ti-brand-whatsapp"></i><span id="zoneFwdPillText">Send to them</span>
+          </button>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px;">
           <button class="paste-maps-btn" onclick="window.pasteMapsUrl()" style="margin-top:0;">
@@ -1337,6 +1342,8 @@ window.updateZoneBadge = function() {
   window.otherChapterName = null;
   window.otherChapterPhone = null;
   callPill.style.display = 'none';
+  var fwdPill = document.getElementById('zoneFwdPill');
+  if (fwdPill) fwdPill.style.display = 'none';
 
   if (!zone) {
     window._outsideZoneNotified = false;
@@ -1366,12 +1373,17 @@ window.updateZoneBadge = function() {
         callPill.href = 'tel:' + otherChapter.phone.replace(/\D/g, '');
         callPill.style.display = 'inline-flex';
       }
+      if (fwdPill) {
+        document.getElementById('zoneFwdPillText').textContent = 'Send to ' + otherChapter.name.replace(/\s+(NJ|NY|PA|CT|OH|TX|CO|MI)$/, '');
+        fwdPill.style.display = 'inline-flex';
+      }
       // Known chapter's territory — nothing to auto-pop; reset the guard so a
       // later, genuinely-uncovered address still triggers the modal.
       window._outsideZoneNotified = false;
     } else {
       badge.classList.add('zone-outside', 'on');
       text.textContent = 'Outside Bergen coverage area';
+      if (fwdPill) { document.getElementById('zoneFwdPillText').textContent = 'Send to another area'; fwdPill.style.display = 'inline-flex'; }
       // Auto-pop the shared dispatch-check modal the moment a location resolves
       // to genuinely uncovered — only once per address (not on every re-check),
       // and never on top of a modal the dispatcher is already mid-interaction with.
