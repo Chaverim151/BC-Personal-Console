@@ -4125,6 +4125,39 @@ window.callPush = async function(id) {
   }
 };
 
+// When a call is cleared, remove its replies from the Replies panel. A person
+// who also replied about another (still active) call keeps that conversation.
+function addReplyCleanup(updates, call) {
+  if (typeof rp === 'undefined' || !rp || !rp.all) return;
+  var ids = [String(call.id), String(call.callNum)];
+  Object.keys(rp.all).forEach(function(tk) {
+    var msgs = rp.all[tk] || {};
+    var keep = [], drop = [];
+    Object.keys(msgs).forEach(function(mk) {
+      var m = msgs[mk];
+      if (m && m.call && ids.indexOf(String(m.call)) >= 0) drop.push(mk);
+      else if (m && m.call) keep.push(mk);
+    });
+    if (!drop.length) return;
+    if (!keep.length) {                       // nothing left about other calls
+      updates['waThreads/' + tk] = null;
+      updates['waMessages/' + tk] = null;
+      return;
+    }
+    drop.forEach(function(mk) { updates['waMessages/' + tk + '/' + mk] = null; });
+    keep.sort(function(a, b) { return (msgs[a].at || 0) - (msgs[b].at || 0); });
+    var last = msgs[keep[keep.length - 1]];
+    var lastTheirs = null;
+    keep.forEach(function(mk) { if (!msgs[mk].fromMe) lastTheirs = msgs[mk]; });
+    updates['waThreads/' + tk + '/lastCall'] = last.call;
+    updates['waThreads/' + tk + '/lastAt'] = last.at || 0;
+    updates['waThreads/' + tk + '/lastText'] = String(last.text || '').slice(0, 200);
+    updates['waThreads/' + tk + '/lastFromMe'] = !!last.fromMe;
+    if (lastTheirs) updates['waThreads/' + tk + '/lastMsgId'] = lastTheirs.msgId || null;
+    updates['waThreads/' + tk + '/unread'] = 0;
+  });
+}
+
 window.callClear = async function(id, alreadyConfirmed) {
   var call = window._activeCalls[id];
   if (!call) return;
@@ -4138,6 +4171,7 @@ window.callClear = async function(id, alreadyConfirmed) {
     var updates = {};
     updates['callHistory/' + id + '_' + call.createdAt] = history;
     updates['activeCalls/' + id] = null;
+    addReplyCleanup(updates, call);          // its WhatsApp replies go too
     await update(ref(db), updates);
     if (await postCallUpdate(call, text)) showToast('✓ ' + callLabel(call) + ' cleared');
   } catch (e) {
@@ -4299,6 +4333,7 @@ onValue(ref(db, 'waThreads'), function(snap) {
   if (rp.open && rp.view === 'chat' && rp.key && rp.threads[rp.key] && rp.threads[rp.key].unread) {
     update(ref(db, 'waThreads/' + rp.key), { unread: 0 }).catch(function() {});
   }
+  if (rp.view === 'chat' && rp.key && !rp.threads[rp.key]) rpLeaveChat();
   if (rp.open) rpRender();
 });
 
