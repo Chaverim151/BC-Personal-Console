@@ -328,6 +328,8 @@ window.isMeaningfullyDifferentPoiName = function(name, address) {
   .ptt-mute { width: 30px; height: 30px; border-radius: 8px; border: 1.5px solid #C8A532; background: #0F0E06; color: #C8A532; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.3); padding: 0; }
   .ptt-mute i { font-size: 16px; }
   .ptt-mute.muted { color: #E05000; border-color: #E05000; }
+  .ptt-mute:disabled { opacity: 0.4; cursor: default; }
+  .ptt-mute.replaying { color: #0F0E06; background: #C8A532; }
   .ptt-mute.listening { color: #0F0E06; background: #C8A532; animation: ptt-pulse 1s infinite; }
   @keyframes ptt-pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(249,168,37,0.5), 0 6px 20px rgba(0,0,0,0.35); } 50% { box-shadow: 0 0 0 10px rgba(249,168,37,0), 0 6px 20px rgba(0,0,0,0.35); } }
   .ptt-channel { background: #0F0E06; color: #C8A532; border: 1.5px solid #C8A532; border-radius: 8px; font-size: 12px; font-weight: 700; padding: 5px 26px 5px 9px; width: auto; max-width: 150px; font-family: inherit; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.3); background-position: right 8px center; }
@@ -619,6 +621,7 @@ window.isMeaningfullyDifferentPoiName = function(name, address) {
   <div class="ptt-row">
     <button type="button" class="ptt-mute" id="pttKeyBtn" onclick="window.setPttKey()" title="Push-to-talk key: Space (click to change)"><i class="ti ti-keyboard"></i></button>
     <button type="button" class="ptt-mute" id="pttMute" onclick="window.toggleZelloMute()" title="Mute incoming audio"><i class="ti ti-volume"></i></button>
+    <button type="button" class="ptt-mute" id="pttReplay" onclick="window.zelloReplay()" title="Nothing to replay yet" disabled><i class="ti ti-player-track-prev"></i></button>
     <select class="ptt-channel" id="pttChannel" aria-label="Zello channel">
       <option value="01 Dispatch">01 Dispatch</option>
       <option value="03 Events">03 Events</option>
@@ -4286,7 +4289,8 @@ var ptt = { state: 'idle', id: 0 };
 var pttCounter = 0;
 var pttWorkletUrl = null;
 // Incoming audio
-var rx = { ctx: null, gain: null, streams: {}, muted: false, nextTime: 0, talker: null, endTimer: null };
+var rx = { ctx: null, gain: null, streams: {}, muted: false, nextTime: 0, talker: null, endTimer: null,
+           last: null, replaySrc: null };   // last finished transmission (for Replay)
 
 function zcChannel() {
   var el = document.getElementById('pttChannel');
@@ -4304,6 +4308,7 @@ function pttUpdateUi() {
   else if (ptt.state === 'connecting') { cls += ' connecting'; text = 'Connecting…'; }
   else if (ptt.state === 'sending') { cls += ' sending'; text = 'Sending…'; }
   else if (rx.talker) { cls += ' rx'; lcls += ' rx'; text = '🔊 ' + rx.talker; }
+  else if (rx.replaySrc) { lcls += ' rx'; text = '\u21BA Replay: ' + rx.replayFrom; }
   else if (zc.ready) { text = 'Hold to talk'; }
   else if (zc.retry > 0) { cls += ' offline'; text = 'Offline — retrying'; }
   else { cls += ' offline'; text = 'Connecting…'; }
@@ -4419,12 +4424,14 @@ function rxStart(m) {
     }
   } catch (e) {}
   rxStop(m.stream_id, true);
+  if (rx.replaySrc) { try { rx.replaySrc.stop(); } catch (e) {} }   // live traffic beats a replay
   var dec;
   try {
-    dec = new AudioDecoder({ output: rxPlay, error: function(e) { console.warn('Zello decode error:', e); } });
+    var rec = { from: m.from || 'Someone', channel: zcChannel(), at: Date.now(), sampleRate: sr, chunks: [], frames: 0 };
+    dec = new AudioDecoder({ output: function(ad) { rxPlay(ad, rec); }, error: function(e) { console.warn('Zello decode error:', e); } });
     dec.configure({ codec: 'opus', sampleRate: sr, numberOfChannels: 1 });
   } catch (e) { console.warn('Cannot decode Zello audio:', e); return; }
-  rx.streams[m.stream_id] = { dec: dec, ts: 0, frameUs: frameUs, from: m.from || 'Someone' };
+  rx.streams[m.stream_id] = { dec: dec, ts: 0, frameUs: frameUs, from: m.from || 'Someone', rec: rec };
   if (rx.endTimer) { clearTimeout(rx.endTimer); rx.endTimer = null; }
   rx.talker = m.from || 'Someone';
   rxEnsureCtx();
@@ -4442,13 +4449,15 @@ function rxAudio(buf) {
   s.ts += s.frameUs;
 }
 
-function rxPlay(ad) {
+function rxPlay(ad, rec) {
   try {
-    var ctx = rxEnsureCtx();
-    if (!ctx) return;
     var n = ad.numberOfFrames;
     var pcm = new Float32Array(n);
     ad.copyTo(pcm, { planeIndex: 0, format: 'f32-planar' });
+    // Keep a copy for Replay (max ~2.5 min)
+    if (rec && rec.frames < ad.sampleRate * 150) { rec.chunks.push(pcm); rec.frames += n; rec.sampleRate = ad.sampleRate; }
+    var ctx = rxEnsureCtx();
+    if (!ctx) return;
     var buf = ctx.createBuffer(1, n, ad.sampleRate);
     buf.copyToChannel(pcm, 0);
     var src = ctx.createBufferSource();
@@ -4470,7 +4479,10 @@ function rxStop(streamId, quiet) {
   var s = rx.streams[streamId];
   if (s) {
     delete rx.streams[streamId];
-    s.dec.flush().catch(function() {}).then(function() { try { s.dec.close(); } catch (e) {} });
+    s.dec.flush().catch(function() {}).then(function() {
+      try { s.dec.close(); } catch (e) {}
+      if (s.rec && s.rec.frames > s.rec.sampleRate * 0.3) { s.rec.dur = s.rec.frames / s.rec.sampleRate; rx.last = s.rec; rxReplayUi(); }
+    });
   }
   if (quiet || Object.keys(rx.streams).length) return;
   // Keep showing the name until the buffered audio finishes playing
@@ -4483,6 +4495,41 @@ function rxStopAll() {
   Object.keys(rx.streams).forEach(function(id) { rxStop(id, true); });
   rx.talker = null;
 }
+
+// ── Replay the last transmission ──
+function rxReplayUi() {
+  var b = document.getElementById('pttReplay');
+  if (!b) return;
+  var L = rx.last;
+  b.disabled = !L;
+  b.classList.toggle('replaying', !!rx.replaySrc);
+  b.innerHTML = rx.replaySrc ? '<i class="ti ti-player-stop"></i>' : '<i class="ti ti-player-track-prev"></i>';
+  b.title = !L ? 'Nothing to replay yet'
+    : rx.replaySrc ? 'Stop replay'
+    : 'Replay last: ' + L.from + ' \u00B7 ' + formatTime(L.at) + ' \u00B7 ' + Math.round(L.dur) + 's' + (L.channel ? ' (' + L.channel + ')' : '');
+}
+
+window.zelloReplay = function() {
+  if (rx.replaySrc) { try { rx.replaySrc.stop(); } catch (e) {} return; }
+  var L = rx.last;
+  if (!L || !L.frames) return;
+  var ctx = rxEnsureCtx();
+  if (!ctx) return;
+  var buf = ctx.createBuffer(1, L.frames, L.sampleRate);
+  var data = buf.getChannelData(0), off = 0;
+  L.chunks.forEach(function(c) { data.set(c, off); off += c.length; });
+  var src = ctx.createBufferSource();
+  src.buffer = buf;
+  src.connect(ctx.destination);           // plays even if incoming audio is muted
+  src.onended = function() {
+    if (rx.replaySrc === src) rx.replaySrc = null;
+    rx.replayFrom = null;
+    rxReplayUi(); pttUpdateUi();
+  };
+  rx.replaySrc = src; rx.replayFrom = L.from;
+  src.start();
+  rxReplayUi(); pttUpdateUi();
+};
 
 window.toggleZelloMute = function() {
   rx.muted = !rx.muted;
