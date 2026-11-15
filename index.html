@@ -371,6 +371,48 @@ window.isMeaningfullyDifferentPoiName = function(name, address) {
 
   /* ── Zello key-up popup ── */
   .keyup-modal { max-width: 440px; width: 100%; }
+  /* ── Replies panel ── */
+  .replies-btn { margin-left: auto; position: relative; display: inline-flex; align-items: center; gap: 6px; background: transparent; color: #C8A532; border: 1.5px solid #C8A532; border-radius: 9px; padding: 7px 13px; font-size: 12.5px; font-weight: 700; cursor: pointer; font-family: inherit; white-space: nowrap; }
+  .replies-btn .ti { font-size: 16px; }
+  .replies-btn:hover { background: rgba(200,165,50,0.12); }
+  .replies-btn.has-new { background: #C8A532; color: #0F0E06; }
+  .replies-badge { background: #B02800; color: #fff; border-radius: 10px; font-size: 11px; font-weight: 800; padding: 1px 7px; min-width: 20px; text-align: center; }
+  .rp-backdrop { position: fixed; inset: 0; background: rgba(15,14,6,0.35); z-index: 900; opacity: 0; pointer-events: none; transition: opacity .2s; }
+  .rp-backdrop.open { opacity: 1; pointer-events: auto; }
+  .rp { position: fixed; top: 0; right: 0; bottom: 0; width: 400px; max-width: 100vw; background: #FFFEF5; z-index: 901; display: flex; flex-direction: column; box-shadow: -8px 0 30px rgba(0,0,0,0.25); transform: translateX(105%); transition: transform .22s ease; border-left: 3px solid #C8A532; }
+  .rp.open { transform: none; }
+  .rp-hdr { background: #0F0E06; color: #C8A532; padding: 14px 16px; display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 15px; }
+  .rp-hdr .sub { display: block; font-size: 11.5px; font-weight: 600; color: #B8A877; margin-top: 2px; }
+  .rp-hdr button { background: none; border: none; color: #C8A532; font-size: 20px; cursor: pointer; padding: 2px 4px; line-height: 1; }
+  .rp-hdr .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rp-list { flex: 1; overflow-y: auto; }
+  .rp-empty { padding: 40px 24px; text-align: center; color: #9A8050; font-size: 13.5px; line-height: 1.5; }
+  .rp-thread { display: block; width: 100%; text-align: left; border: none; border-bottom: 1px solid #EDE4BF; background: none; padding: 12px 16px; cursor: pointer; font-family: inherit; }
+  .rp-thread:hover { background: #FDF6D8; }
+  .rp-thread .top { display: flex; align-items: center; gap: 8px; }
+  .rp-thread .nm { font-weight: 800; font-size: 14px; color: #0F0E06; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rp-thread .tm { font-size: 11.5px; color: #9A8050; }
+  .rp-thread .pv { font-size: 13px; color: #6B5515; margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rp-thread.unread .nm::after { content: ''; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #B02800; margin-left: 7px; vertical-align: middle; }
+  .rp-tag { font-size: 10.5px; font-weight: 800; border-radius: 5px; padding: 1px 6px; text-transform: uppercase; letter-spacing: .3px; }
+  .rp-tag.g { background: #E6EEF7; color: #3D6A99; } .rp-tag.p { background: #F3E8FF; color: #6B3FA0; }
+  .rp-msgs { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 8px; background: #F7F1DA; }
+  .rp-msg { max-width: 85%; padding: 8px 11px; border-radius: 12px; font-size: 13.5px; line-height: 1.4; white-space: pre-wrap; word-wrap: break-word; box-shadow: 0 1px 1px rgba(0,0,0,0.06); }
+  .rp-msg.them { align-self: flex-start; background: #fff; border-top-left-radius: 4px; cursor: pointer; }
+  .rp-msg.them:hover { box-shadow: 0 0 0 2px rgba(200,165,50,0.5); }
+  .rp-msg.them.sel { box-shadow: 0 0 0 2px #C8A532; }
+  .rp-msg.me { align-self: flex-end; background: #FDF0B8; border-top-right-radius: 4px; }
+  .rp-msg .q { border-left: 3px solid #C8A532; background: rgba(200,165,50,0.12); padding: 4px 8px; border-radius: 6px; font-size: 12px; color: #6B5515; margin-bottom: 5px; max-height: 3.2em; overflow: hidden; }
+  .rp-msg .t { font-size: 10.5px; color: #9A8050; margin-top: 3px; text-align: right; }
+  .rp-compose { border-top: 1.5px solid #E0D4A0; padding: 10px 12px; background: #FFFEF5; }
+  .rp-quote { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #6B5515; background: #FDF6D8; border-left: 3px solid #C8A532; border-radius: 6px; padding: 5px 8px; margin-bottom: 8px; }
+  .rp-quote span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rp-quote button { background: none; border: none; cursor: pointer; color: #9A8050; font-size: 15px; padding: 0; }
+  .rp-row { display: flex; gap: 8px; align-items: flex-end; }
+  .rp-row textarea { flex: 1; resize: none; min-height: 42px; max-height: 120px; font-size: 14px; padding: 10px 12px; border-radius: 10px; font-family: inherit; }
+  .rp-send { background: #C8A532; color: #0F0E06; border: none; border-radius: 10px; width: 46px; height: 42px; font-size: 19px; cursor: pointer; flex-shrink: 0; }
+  .rp-send:disabled { opacity: 0.5; cursor: wait; }
+  .rp-hint { font-size: 11px; color: #9A8050; margin-top: 6px; }
   .keyup-calls { display: flex; flex-direction: column; gap: 8px; margin: 0.9rem 0 1rem; text-align: left; }
   .keyup-call { border: 2px solid #E0D4A0; background: #FFFEF5; border-radius: 12px; padding: 10px 12px; cursor: pointer; font-family: inherit; text-align: left; width: 100%; }
   .keyup-call:hover { border-color: #C8A532; }
@@ -567,7 +609,10 @@ window.isMeaningfullyDifferentPoiName = function(name, address) {
     <div class="brand-sub">Bergen County</div>
     <div class="brand-tag">MC-151's Dispatch Console</div>
   </div>
-  <button id="installAppBtn" onclick="window.installApp()" style="display:none;margin-left:auto;align-items:center;gap:6px;background:#C8A532;color:#0F0E06;border:none;border-radius:9px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;">
+  <button type="button" class="replies-btn" id="repliesBtn" onclick="window.openReplies()" title="Replies to your WhatsApp messages">
+    <i class="ti ti-message-reply"></i> Replies <span class="replies-badge" id="repliesBadge" style="display:none">0</span>
+  </button>
+  <button id="installAppBtn" onclick="window.installApp()" style="display:none;margin-left:8px;align-items:center;gap:6px;background:#C8A532;color:#0F0E06;border:none;border-radius:9px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;">
     <i class="ti ti-download" style="font-size:15px;"></i> Install App
   </button>
 </div>
@@ -3896,6 +3941,188 @@ function renderActiveCalls() {
 
 // Live updates — the board refreshes on its own whenever anything changes
 function startBoard() {
+
+// ── Replies panel ──
+// WAHA → Worker (/waha-webhook) saves replies to MY messages (group replies and
+// private replies) under waThreads / waMessages. One conversation per person:
+// "in group" (answers are sent to the group, quoting their message) or
+// "private" (answers go to them directly).
+var rp = { threads: {}, open: false, view: 'list', key: null, msgs: {}, unsub: null, quoteId: null, quoteText: '', lastUnread: null };
+
+function rpTimeAgo(ms) {
+  var d = new Date(ms), now = new Date();
+  if (d.toDateString() === now.toDateString()) return formatTime(ms);
+  return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + formatTime(ms);
+}
+function rpName(t) {
+  if (t.name) return t.name;
+  var ph = String(t.phone || '');
+  if (/^1\d{10}$/.test(ph)) return '(' + ph.slice(1, 4) + ') ' + ph.slice(4, 7) + '-' + ph.slice(7);
+  return ph ? '+' + ph : 'Unknown';
+}
+function rpBeep() {
+  try {
+    var ac = new (window.AudioContext || window.webkitAudioContext)();
+    [880, 1175].forEach(function(f, i) {
+      var o = ac.createOscillator(), g = ac.createGain();
+      o.frequency.value = f; o.connect(g); g.connect(ac.destination);
+      var t0 = ac.currentTime + i * 0.14;
+      g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.25, t0 + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.13);
+      o.start(t0); o.stop(t0 + 0.14);
+    });
+    setTimeout(function() { ac.close(); }, 600);
+  } catch (e) {}
+}
+
+onValue(ref(db, 'waThreads'), function(snap) {
+  rp.threads = snap.val() || {};
+  var unread = 0, newest = null;
+  Object.keys(rp.threads).forEach(function(k) {
+    var t = rp.threads[k];
+    if (k === rp.key && rp.open && rp.view === 'chat') return;
+    unread += t.unread || 0;
+    if (t.unread && !t.lastFromMe && (!newest || t.lastAt > newest.lastAt)) newest = t;
+  });
+  var badge = document.getElementById('repliesBadge');
+  badge.textContent = unread; badge.style.display = unread ? '' : 'none';
+  document.getElementById('repliesBtn').classList.toggle('has-new', unread > 0);
+  if (rp.lastUnread !== null && unread > rp.lastUnread && newest) {
+    showToast('💬 ' + rpName(newest) + ': ' + (newest.lastText || '').slice(0, 60));
+    rpBeep();
+  }
+  rp.lastUnread = unread;
+  // If the open conversation got a new message, keep it marked read
+  if (rp.open && rp.view === 'chat' && rp.key && rp.threads[rp.key] && rp.threads[rp.key].unread) {
+    update(ref(db, 'waThreads/' + rp.key), { unread: 0 }).catch(function() {});
+  }
+  if (rp.open) rpRender();
+});
+
+window.openReplies = function() {
+  rp.open = true;
+  document.getElementById('rpPanel').classList.add('open');
+  document.getElementById('rpBackdrop').classList.add('open');
+  rpRender();
+};
+window.closeReplies = function() {
+  rp.open = false;
+  document.getElementById('rpPanel').classList.remove('open');
+  document.getElementById('rpBackdrop').classList.remove('open');
+  rpLeaveChat();
+};
+function rpLeaveChat() {
+  if (rp.unsub) { rp.unsub(); rp.unsub = null; }
+  rp.view = 'list'; rp.key = null; rp.msgs = {}; rp.quoteId = null;
+}
+window.rpBack = function() { rpLeaveChat(); rpRender(); };
+
+window.rpOpenThread = function(key) {
+  rpLeaveChat();
+  rp.view = 'chat'; rp.key = key;
+  var t = rp.threads[key] || {};
+  // Quote their latest message by default (in the group that shows who you're answering)
+  rp.quoteId = t.isGroup ? (t.lastMsgId || null) : null;
+  rp.quoteText = t.isGroup ? (t.lastText || '') : '';
+  rp.unsub = onValue(ref(db, 'waMessages/' + key), function(snap) {
+    rp.msgs = snap.val() || {};
+    rpRender();
+  });
+  if (t.unread) update(ref(db, 'waThreads/' + key), { unread: 0 }).catch(function() {});
+  rpRender();
+  setTimeout(function() { var i = document.getElementById('rpInput'); if (i) i.focus(); }, 250);
+};
+
+window.rpDeleteThread = async function(key) {
+  var t = rp.threads[key];
+  if (!t || !confirm('Remove the conversation with ' + rpName(t) + ' from this panel?\n(Nothing is deleted in WhatsApp.)')) return;
+  rpLeaveChat();
+  await Promise.all([remove(ref(db, 'waThreads/' + key)), remove(ref(db, 'waMessages/' + key))]).catch(function() {});
+  rpRender();
+};
+
+window.rpQuote = function(msgKey) {
+  var m = rp.msgs[msgKey];
+  if (!m || m.fromMe) return;
+  rp.quoteId = m.msgId || null; rp.quoteText = m.text || '';
+  rpRender();
+};
+window.rpClearQuote = function() { rp.quoteId = null; rp.quoteText = ''; rpRender(); };
+window.rpKey = function(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); window.rpSend(); }
+};
+
+window.rpSend = async function() {
+  var input = document.getElementById('rpInput'), btn = document.getElementById('rpSendBtn');
+  var text = (input.value || '').trim();
+  if (!text || !rp.key) return;
+  btn.disabled = true;
+  try {
+    var payload = { text: text, to: 'thread', thread: rp.key };
+    if (rp.quoteId) payload.reply_to = rp.quoteId;
+    var resp = await fetch(WAHA_PROXY_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    var data = await resp.json().catch(function() { return null; });
+    if (!resp.ok) { showToast('Not sent: ' + ((data && data.error) || ('HTTP ' + resp.status))); return; }
+    input.value = '';
+    var t = rp.threads[rp.key] || {};
+    if (t.isGroup) { rp.quoteId = null; rp.quoteText = ''; }
+    showToast('✓ Sent to ' + rpName(t) + (t.isGroup ? ' (in group)' : ''));
+  } catch (e) {
+    showToast('Not sent — could not reach relay');
+  } finally {
+    btn.disabled = false; input.focus(); rpRender();
+  }
+};
+
+function rpRender() {
+  var hdr = document.getElementById('rpHdr'), body = document.getElementById('rpBody'), comp = document.getElementById('rpCompose');
+  if (rp.view === 'list') {
+    hdr.innerHTML = '<i class="ti ti-message-reply" style="font-size:20px"></i><div class="grow">Replies<span class="sub">Replies to your WhatsApp messages</span></div>' +
+      '<button type="button" onclick="window.closeReplies()" title="Close">&times;</button>';
+    comp.style.display = 'none';
+    body.className = 'rp-list';
+    var keys = Object.keys(rp.threads).sort(function(a, b) { return (rp.threads[b].lastAt || 0) - (rp.threads[a].lastAt || 0); });
+    if (!keys.length) {
+      body.innerHTML = '<div class="rp-empty"><i class="ti ti-messages" style="font-size:34px;color:#C8A532"></i><br>No replies yet.<br>When someone replies to one of your messages — in the group or privately — it shows up here.</div>';
+      return;
+    }
+    body.innerHTML = keys.map(function(k) {
+      var t = rp.threads[k];
+      return '<button type="button" class="rp-thread' + (t.unread ? ' unread' : '') + '" onclick="window.rpOpenThread(\'' + escapeHtml(k) + '\')">' +
+        '<div class="top"><span class="nm">' + escapeHtml(rpName(t)) + '</span>' +
+        '<span class="rp-tag ' + (t.isGroup ? 'g">In group' : 'p">Private') + '</span>' +
+        '<span class="tm">' + escapeHtml(t.lastAt ? rpTimeAgo(t.lastAt) : '') + '</span></div>' +
+        '<div class="pv">' + (t.lastFromMe ? 'You: ' : '') + escapeHtml(t.lastText || '') + '</div></button>';
+    }).join('');
+    return;
+  }
+  // Conversation view
+  var t = rp.threads[rp.key] || {};
+  hdr.innerHTML = '<button type="button" onclick="window.rpBack()" title="Back"><i class="ti ti-arrow-left"></i></button>' +
+    '<div class="grow">' + escapeHtml(rpName(t)) + '<span class="sub">' + (t.isGroup ? 'Replied in Bergen County Chaverim Dispatch' : 'Private chat') +
+    (t.phone ? ' · +' + escapeHtml(t.phone) : '') + '</span></div>' +
+    '<button type="button" onclick="window.rpDeleteThread(\'' + escapeHtml(rp.key) + '\')" title="Remove from panel"><i class="ti ti-trash" style="font-size:18px"></i></button>' +
+    '<button type="button" onclick="window.closeReplies()" title="Close">&times;</button>';
+  body.className = 'rp-msgs';
+  var mk = Object.keys(rp.msgs).sort(function(a, b) { return (rp.msgs[a].at || 0) - (rp.msgs[b].at || 0); });
+  body.innerHTML = mk.map(function(k) {
+    var m = rp.msgs[k];
+    var sel = !m.fromMe && rp.quoteId && m.msgId === rp.quoteId;
+    return '<div class="rp-msg ' + (m.fromMe ? 'me' : 'them') + (sel ? ' sel' : '') + '"' +
+      (m.fromMe ? '' : ' onclick="window.rpQuote(\'' + escapeHtml(k) + '\')" title="Click to reply to this message"') + '>' +
+      (m.quoted ? '<div class="q">' + escapeHtml(m.quoted) + '</div>' : '') +
+      escapeHtml(m.text || '') + '<div class="t">' + escapeHtml(m.at ? rpTimeAgo(m.at) : '') + '</div></div>';
+  }).join('') || '<div class="rp-empty">Loading…</div>';
+  body.scrollTop = body.scrollHeight;
+  comp.style.display = '';
+  var q = document.getElementById('rpQuote');
+  q.style.display = rp.quoteId ? '' : 'none';
+  document.getElementById('rpQuoteText').textContent = rp.quoteId ? 'Replying to: ' + rp.quoteText : '';
+  document.getElementById('rpHint').textContent = t.isGroup
+    ? 'Sends to the group as a reply to ' + rpName(t) + '’s message. Click any of their messages to quote it.'
+    : 'Sends privately to ' + rpName(t) + '.';
+}
+document.addEventListener('keydown', function(e) { if (e.key === 'Escape' && rp.open) window.closeReplies(); });
+
 onValue(ref(db, 'activeCalls'), function(snap) {
   window._activeCalls = snap.exists() ? snap.val() : {};
   renderActiveCalls();
@@ -4950,5 +5177,18 @@ if ('serviceWorker' in navigator) {
   });
 }
 </script>
+<div class="rp-backdrop" id="rpBackdrop" onclick="window.closeReplies()"></div>
+<aside class="rp" id="rpPanel" aria-label="WhatsApp replies">
+  <div class="rp-hdr" id="rpHdr"></div>
+  <div class="rp-list" id="rpBody"></div>
+  <div class="rp-compose" id="rpCompose" style="display:none">
+    <div class="rp-quote" id="rpQuote" style="display:none"><i class="ti ti-corner-up-left"></i><span id="rpQuoteText"></span><button type="button" onclick="window.rpClearQuote()" title="Don't quote">&times;</button></div>
+    <div class="rp-row">
+      <textarea id="rpInput" rows="1" placeholder="Type a reply…" onkeydown="window.rpKey(event)"></textarea>
+      <button type="button" class="rp-send" id="rpSendBtn" onclick="window.rpSend()" title="Send"><i class="ti ti-send"></i></button>
+    </div>
+    <div class="rp-hint" id="rpHint"></div>
+  </div>
+</aside>
 </body>
 </html>
