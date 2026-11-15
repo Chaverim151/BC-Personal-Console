@@ -3728,8 +3728,26 @@ function callLabel(call) {
 
 // Posts an update as a reply to the call's original message. If WAHA is down,
 // falls back to opening WhatsApp so the update still goes out.
+// For a call sent by hand (WhatsApp link), find its dispatch message in the
+// group so updates can reply to it. Saved on the call once found.
+async function linkOriginalMessage(call) {
+  if (call.waMessageId || !call.callNum || call._linkTried) return call.waMessageId || '';
+  call._linkTried = true;
+  try {
+    var r = await bcFetch(WAHA_PROXY_URL.replace(/\/send$/, '/find-call') + '?num=' + encodeURIComponent(call.callNum), { cache: 'no-store' });
+    var d = await r.json().catch(function() { return null; });
+    if (r.ok && d && d.messageId) {
+      call.waMessageId = d.messageId;
+      try { await update(ref(db, 'activeCalls/' + call.id), { waMessageId: d.messageId }); } catch (e) {}
+      return d.messageId;
+    }
+  } catch (e) {}
+  return '';
+}
+
 async function postCallUpdate(call, text) {
-  // If we don't have the original message to reply to, add the Call# and
+  if (!call.waMessageId) await linkOriginalMessage(call);
+  // If we still don't have the original message to reply to, add the Call# and
   // location so the group still knows which call this is about.
   if (!call.waMessageId) text += '\n' + callLabel(call) + (call.location ? ' · ' + call.location : '');
   var sent = await sendViaWaha(text, call.waMessageId || '', '', call.id);
