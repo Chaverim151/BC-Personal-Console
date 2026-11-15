@@ -380,7 +380,7 @@ window.isMeaningfullyDifferentPoiName = function(name, address) {
   .keyup-call small { display: block; font-size: 11.5px; color: #9A8050; margin-top: 3px; }
   .keyup-roles { display: grid; gap: 8px; margin-bottom: 8px; }
   .keyup-roles .modal-btn { color: #fff; }
-  .keyup-roles .r { background: #2E7D32; } .keyup-roles .b { background: #C88A12; } .keyup-roles .o { background: #3D6A99; }
+  .keyup-roles .r { background: #2E7D32; } .keyup-roles .clr { background: #B02800; } .keyup-roles .b { background: #C88A12; } .keyup-roles .o { background: #3D6A99; }
   .keyup-roles .modal-btn:hover { filter: brightness(1.1); }
   .keyup-roles .modal-btn:disabled { opacity: 0.5; cursor: wait; }
   .keyup-dismiss { width: 100%; }
@@ -430,6 +430,13 @@ window.isMeaningfullyDifferentPoiName = function(name, address) {
   .push-call-btn { width: 100%; border: 1.5px solid #C8A532; background: #C8A532; color: #0F0E06; border-radius: 10px; padding: 10px; font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit; display: flex; align-items: center; justify-content: center; gap: 6px; }
   .push-call-btn:hover { background: #D8B540; }
   .push-call-btn:disabled { opacity: 0.5; cursor: wait; }
+  .autopush-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 13px; font-weight: 600; color: #6B5515; flex-wrap: wrap; }
+  .autopush-check { display: inline-flex; align-items: center; gap: 7px; cursor: pointer; user-select: none; margin: 0; font-size: 13px; font-weight: 700; color: #6B5515; }
+  .autopush-check input { width: 18px; height: 18px; margin: 0; accent-color: #C8A532; cursor: pointer; }
+  .autopush-row:not(.on) select { opacity: 0.75; }
+  .autopush-row select { width: auto; padding: 5px 28px 5px 10px; font-size: 13px; border-radius: 8px; background-position: right 8px center; }
+  .autopush-row.on select { border-color: #C8A532; background-color: #FDF6D8; font-weight: 700; }
+  .autopush-next { font-size: 12px; font-weight: 700; color: #fff; background: #C8A532; border-radius: 6px; padding: 2px 8px; }
   .call-actions .clear-call-btn { margin-top: 0; }
   .int-call-btn { width: 100%; border: 1.5px solid #2E2A10; background: #0F0E06; color: #C8A532; border-radius: 10px; padding: 10px; font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit; display: flex; align-items: center; justify-content: center; gap: 6px; }
   .int-call-btn:hover { background: #1C1A08; }
@@ -3605,7 +3612,12 @@ window.callAddUnit = async function(id, role, unitFromPrompt) {
   if (input) input.value = ''; // clear before saving — the board redraws on save
   try {
     var updates = {};
-    updates['activeCalls/' + id + '/units/' + key] = { unit: unit, role: role, at: Date.now() };
+    if (existing) {   // already on the call: change the role, keep on-location
+      updates['activeCalls/' + id + '/units/' + key + '/role'] = role;
+      updates['activeCalls/' + id + '/units/' + key + '/at'] = Date.now();
+    } else {
+      updates['activeCalls/' + id + '/units/' + key] = { unit: unit, role: role, at: Date.now() };
+    }
     updates['knownUnits/' + key] = unit;
     await update(ref(db), updates);
     if (await postCallUpdate(call, text)) showToast('✓ ' + unit + ' ' + UNIT_ROLES[role].board);
@@ -3671,6 +3683,84 @@ window.callSendInterstate = async function(id) {
 // "Pushes" the call: replies to the original call message asking for units
 var PUSH_CALL_TEXT = 'Any units available to respond';
 
+// ── Auto push (per call) ──
+// Re-sends "Any units available to respond" every N minutes until a unit is
+// responding or the call is cleared. Saved with the call, so it keeps going
+// after a refresh; a database "claim" makes sure only one open console sends
+// each push.
+const AUTOPUSH_CHOICES = [2, 3, 5, 10, 15];
+
+function autoPushRowHtml(call) {
+  var ap = call.autoPush;
+  var id = escapeHtml(call.id);
+  var every = ap ? ap.every : (autoPushPick[call.id] || 5);
+  var opts = AUTOPUSH_CHOICES.map(function(m) {
+    return '<option value="' + m + '"' + (every === m ? ' selected' : '') + '>every ' + m + ' min</option>';
+  }).join('');
+  return '<div class="autopush-row' + (ap ? ' on' : '') + '">' +
+    '<label class="autopush-check"><input type="checkbox"' + (ap ? ' checked' : '') +
+      ' onchange="window.toggleAutoPush(\'' + id + '\', this.checked)"> Auto push</label>' +
+    '<select id="apEvery_' + id + '" onchange="window.changeAutoPushEvery(\'' + id + '\', this.value)">' + opts + '</select>' +
+    (ap ? '<span class="autopush-next" id="apNext_' + id + '"></span>' : '') + '</div>';
+}
+var autoPushPick = {};   // interval chosen while the box is unticked
+
+window.toggleAutoPush = function(id, on) {
+  var sel = document.getElementById('apEvery_' + id);
+  window.setAutoPush(id, on ? (sel ? sel.value : 5) : 0);
+};
+window.changeAutoPushEvery = function(id, mins) {
+  mins = parseInt(mins, 10) || 5;
+  autoPushPick[id] = mins;
+  var call = window._activeCalls[id];
+  if (call && call.autoPush) window.setAutoPush(id, mins);   // already on → restart with new interval
+};
+
+window.setAutoPush = async function(id, mins) {
+  var call = window._activeCalls[id];
+  if (!call) return;
+  mins = parseInt(mins, 10) || 0;
+  try {
+    if (!mins) {
+      await update(ref(db, 'activeCalls/' + id), { autoPush: null });
+      showToast('Auto push off for ' + callLabel(call));
+    } else {
+      autoPushPick[id] = mins;
+      await update(ref(db, 'activeCalls/' + id), { autoPush: { every: mins, nextAt: Date.now() + mins * 60000, startedAt: Date.now() } });
+      showToast('\u2713 Auto push every ' + mins + ' min for ' + callLabel(call));
+    }
+  } catch (e) { showToast('Could not save \u2014 check connection'); }
+};
+
+async function autoPushTick() {
+  var now = Date.now();
+  var calls = window._activeCalls || {};
+  Object.keys(calls).forEach(function(id) {
+    var call = calls[id], ap = call.autoPush;
+    if (!ap) return;
+    var el = document.getElementById('apNext_' + id);
+    if (callResponder(call)) {           // someone's responding — stop pushing
+      update(ref(db, 'activeCalls/' + id), { autoPush: null }).catch(function() {});
+      return;
+    }
+    var left = Math.max(0, Math.round(((ap.nextAt || 0) - now) / 1000));
+    if (el) el.textContent = 'next in ' + Math.floor(left / 60) + ':' + String(left % 60).padStart(2, '0');
+    if ((ap.nextAt || 0) > now || autoPushBusy[id]) return;
+    // Claim this push so a second open console doesn't send it too
+    autoPushBusy[id] = true;
+    runTransaction(ref(db, 'activeCalls/' + id + '/autoPush'), function(cur) {
+      if (!cur || (cur.nextAt || 0) > Date.now()) return;   // someone else got it / turned off
+      cur.nextAt = Date.now() + (cur.every || 5) * 60000;
+      return cur;
+    }).then(function(res) {
+      if (res && res.committed && window._activeCalls[id] && !callResponder(window._activeCalls[id])) return window.callPush(id, true);
+    }).catch(function(e) { console.warn('Auto push failed:', e); })
+      .then(function() { autoPushBusy[id] = false; });
+  });
+}
+var autoPushBusy = {};
+setInterval(autoPushTick, 1000);
+
 window.callPush = async function(id) {
   var call = window._activeCalls[id];
   if (!call) return;
@@ -3687,10 +3777,10 @@ window.callPush = async function(id) {
   }
 };
 
-window.callClear = async function(id) {
+window.callClear = async function(id, alreadyConfirmed) {
   var call = window._activeCalls[id];
   if (!call) return;
-  if (!confirm('Clear ' + callLabel(call) + '?\nA "call cleared" message will be sent to the group.')) return;
+  if (!alreadyConfirmed && !confirm('Clear ' + callLabel(call) + '?\nA "call cleared" message will be sent to the group.')) return;
 
   var text = 'Call Cleared';
 
@@ -3780,6 +3870,7 @@ function renderActiveCalls() {
           '<button type="button" class="unit-btn observing" onclick="window.callAddUnit(\'' + id + '\',\'observing\')">Observing</button>' +
         '</div>' +
         (call.lastPushAt ? '<div class="call-sent-int">\u2713 Pushed ' + (call.pushCount > 1 ? call.pushCount + '\u00D7, last ' : '') + escapeHtml(formatTime(call.lastPushAt)) + '</div>' : '') +
+        (hasResp ? '' : autoPushRowHtml(call)) +
         (call.interstateAt ? '<div class="call-sent-int">\u2713 Sent to Interstate ' + escapeHtml(formatTime(call.interstateAt)) + '</div>' : '') +
         '<div class="call-actions">' +
           '<button type="button" class="push-call-btn" onclick="window.callPush(\'' + id + '\')"><i class="ti ti-speakerphone"></i> Push call</button>' +
@@ -4603,7 +4694,8 @@ window.loadEquipment = async function() {
 // ── Zello key-up → "add this unit to the call?" ─────────────────────
 // When someone talks on Zello and their Zello name has a unit number
 // (e.g. "BC-12", "BC 12 Moshe"), offer to add them to an active call.
-var keyup = { current: null, queue: [], dismissed: {}, timer: null, selCall: null };
+var keyup = { current: null, mode: 'add', queue: [], dismissed: {}, timer: null, selCall: null };
+window._keyup = keyup;   // for troubleshooting in the browser console
 const KEYUP_SNOOZE_MS = 3 * 60 * 1000;   // after "Not now", don't ask about that unit again for 3 min
 const KEYUP_AUTOHIDE_MS = 60 * 1000;     // popup closes by itself after 1 min
 
@@ -4620,11 +4712,19 @@ function keyupCallsFor(unit) {
     .sort(function(a, b) { return (b.createdAt || 0) - (a.createdAt || 0); });
 }
 
+function keyupCallsWith(unit) {
+  // Active calls this unit IS on, newest first
+  var key = fbKey(unit);
+  return Object.keys(window._activeCalls || {}).map(function(k) { return window._activeCalls[k]; })
+    .filter(function(c) { return !!(c.units && c.units[key]); })
+    .sort(function(a, b) { return (b.createdAt || 0) - (a.createdAt || 0); });
+}
+
 window.offerKeyedUnit = function(zelloName) {
   var unit = unitFromZelloName(zelloName);
   if (!unit) return;
   if (keyup.dismissed[unit] && Date.now() - keyup.dismissed[unit] < KEYUP_SNOOZE_MS) return;
-  if (!keyupCallsFor(unit).length) return;   // no open calls, or already on all of them
+  if (!keyupCallsFor(unit).length && !keyupCallsWith(unit).length) return;   // no open calls
   if (keyup.current === unit) { keyupRestartTimer(); return; }
   if (keyup.queue.indexOf(unit) !== -1) return;
   if (keyup.current) { keyup.queue.push(unit); return; }   // ask after the current popup
@@ -4636,39 +4736,81 @@ function keyupRestartTimer() {
   keyup.timer = setTimeout(function() { window.dismissKeyup(false); }, KEYUP_AUTOHIDE_MS);
 }
 
-function keyupShow(unit) {
-  var calls = keyupCallsFor(unit);
-  if (!calls.length) { keyupNext(); return; }
+function keyupShow(unit, forceAdd) {
+  var onCalls = keyupCallsWith(unit), freeCalls = keyupCallsFor(unit);
+  if (!onCalls.length && !freeCalls.length) { keyupNext(); return; }
   keyup.current = unit;
-  keyup.selCall = calls[0].id;   // start on the newest call
+  // Already on a call → update status; otherwise → add to a call
+  keyup.mode = (onCalls.length && !forceAdd) ? 'update' : 'add';
+  var list = keyup.mode === 'update' ? onCalls : freeCalls;
+  if (!list.length) { keyup.mode = 'update'; list = onCalls; }
+  keyup.selCall = list[0].id;   // start on the newest call
   document.getElementById('keyupUnit').textContent = unit;
-  document.getElementById('keyupQuestion').textContent = calls.length > 1 ? 'Add ' + unit + ' to which call?' : 'Add ' + unit + ' to this call?';
   keyupRender();
   document.getElementById('keyupModal').classList.add('on');
   keyupRestartTimer();
 }
 
+function keyupCallCard(c, unitKey) {
+  var others = c.units ? Object.keys(c.units).filter(function(k) { return k !== unitKey; }).map(function(k) { return c.units[k].unit; }) : [];
+  var mine = unitKey && c.units && c.units[unitKey];
+  var status = mine ? (mine.onLocation ? 'on location' : (UNIT_ROLES[mine.role] || UNIT_ROLES.responding).board) : '';
+  return '<button type="button" class="keyup-call' + (c.id === keyup.selCall ? ' sel' : '') + '" onclick="window.keyupPick(' + escapeHtml(JSON.stringify(c.id)) + ')">' +
+    '<b>' + escapeHtml(callLabel(c)) + (c.urgent ? ' · URGENT' : '') + (status ? ' · ' + escapeHtml(keyup.current + ' ' + status) : '') + '</b>' +
+    '<span>' + escapeHtml(c.nature || '') + '</span>' +
+    '<small>' + escapeHtml(c.location || '') + (others.length ? ' · Also on call: ' + escapeHtml(others.join(', ')) : '') + '</small></button>';
+}
+
 function keyupRender() {
   var unit = keyup.current;
   if (!unit) return;
+  var key = fbKey(unit);
+  var roles = document.getElementById('keyupRoles');
+  var q = document.getElementById('keyupQuestion');
+
+  if (keyup.mode === 'update') {
+    var onCalls = keyupCallsWith(unit);
+    if (!onCalls.length) {   // taken off the call (or call cleared) meanwhile
+      if (keyupCallsFor(unit).length) { keyup.mode = 'add'; keyup.selCall = keyupCallsFor(unit)[0].id; return keyupRender(); }
+      return window.dismissKeyup(false);
+    }
+    if (!onCalls.some(function(c) { return c.id === keyup.selCall; })) keyup.selCall = onCalls[0].id;
+    q.textContent = onCalls.length > 1 ? unit + ' is on ' + onCalls.length + ' calls. Update which one?' : 'Update ' + unit + '’s status?';
+    document.getElementById('keyupCalls').innerHTML = onCalls.map(function(c) { return keyupCallCard(c, key); }).join('');
+    var sel = window._activeCalls[keyup.selCall];
+    var me = sel && sel.units && sel.units[key];
+    var canAdd = keyupCallsFor(unit).length > 0;
+    roles.style.gridTemplateColumns = '1fr 1fr';
+    roles.innerHTML =
+      '<button type="button" class="modal-btn r" data-act="onloc">' + (me && me.onLocation ? 'Undo on location' : 'On location') + '</button>' +
+      '<button type="button" class="modal-btn clr" data-act="clear">Call cleared</button>' +
+      (canAdd ? '<button type="button" class="modal-btn o" data-act="add" style="grid-column:1 / -1;">Add to another call</button>' : '');
+    roles.querySelectorAll('button').forEach(function(b) {
+      b.onclick = async function() {
+        var callId = keyup.selCall;
+        if (!window._activeCalls[callId]) { showToast('That call was cleared'); keyupRender(); return; }
+        if (b.dataset.act === 'add') { keyupShow(unit, true); return; }
+        roles.querySelectorAll('button').forEach(function(x) { x.disabled = true; });
+        if (b.dataset.act === 'onloc') await window.callToggleOnLocation(callId, key);
+        else if (b.dataset.act === 'clear') await window.callClear(callId, true);
+        window.dismissKeyup(true);   // handled — don't ask about this unit again for a bit
+      };
+    });
+    return;
+  }
+
+  // Add mode
   var calls = keyupCallsFor(unit);
   if (!calls.length) { window.dismissKeyup(false); return; }
   if (!calls.some(function(c) { return c.id === keyup.selCall; })) keyup.selCall = calls[0].id;
-  document.getElementById('keyupCalls').innerHTML = calls.map(function(c) {
-    var units = c.units ? Object.keys(c.units).map(function(k) { return c.units[k].unit; }).join(', ') : '';
-    return '<button type="button" class="keyup-call' + (c.id === keyup.selCall ? ' sel' : '') + '" onclick="window.keyupPick(' + escapeHtml(JSON.stringify(c.id)) + ')">' +
-      '<b>' + escapeHtml(callLabel(c)) + (c.urgent ? ' · URGENT' : '') + '</b>' +
-      '<span>' + escapeHtml(c.nature || '') + '</span>' +
-      '<small>' + escapeHtml(c.location || '') + (units ? ' · On call: ' + escapeHtml(units) : '') + '</small></button>';
-  }).join('');
-  var sel = window._activeCalls[keyup.selCall];
-  var hasResp = !!callResponder(sel);
-  var btns = (hasResp ? '' : '<button type="button" class="modal-btn r" data-role="responding">Responding</button>') +
+  q.textContent = calls.length > 1 ? 'Add ' + unit + ' to which call?' : 'Add ' + unit + ' to this call?';
+  document.getElementById('keyupCalls').innerHTML = calls.map(function(c) { return keyupCallCard(c, null); }).join('');
+  var selC = window._activeCalls[keyup.selCall];
+  var hasResp = !!callResponder(selC);
+  roles.style.gridTemplateColumns = hasResp ? '1fr 1fr' : '1fr 1fr 1fr';
+  roles.innerHTML = (hasResp ? '' : '<button type="button" class="modal-btn r" data-role="responding">Responding</button>') +
     '<button type="button" class="modal-btn b" data-role="backup">Backing up</button>' +
     '<button type="button" class="modal-btn o" data-role="observing">Observing</button>';
-  var roles = document.getElementById('keyupRoles');
-  roles.style.gridTemplateColumns = hasResp ? '1fr 1fr' : '1fr 1fr 1fr';
-  roles.innerHTML = btns;
   roles.querySelectorAll('button').forEach(function(b) {
     b.onclick = async function() {
       var callId = keyup.selCall;
