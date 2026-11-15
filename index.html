@@ -373,6 +373,20 @@ window.isMeaningfullyDifferentPoiName = function(name, address) {
 
   /* ── Zello key-up popup ── */
   .keyup-modal { max-width: 440px; width: 100%; }
+  /* ── Login ── */
+  .login-screen { position: fixed; inset: 0; z-index: 5000; background: radial-gradient(circle at 50% 30%, #2A2510 0%, #0F0E06 70%); display: flex; align-items: center; justify-content: center; padding: 20px; }
+  .login-card { background: #FFFEF5; border-radius: 18px; border-top: 4px solid #C8A532; box-shadow: 0 20px 60px rgba(0,0,0,0.5); padding: 32px 30px 24px; width: 100%; max-width: 360px; text-align: center; }
+  .login-logo { width: 76px; height: 76px; object-fit: contain; border-radius: 14px; border: 2px solid #C8A532; background: #0F0E06; padding: 6px; }
+  .login-title { font-size: 19px; font-weight: 800; color: #0F0E06; margin-top: 14px; }
+  .login-sub { font-size: 13px; color: #9A8050; margin-top: 3px; font-weight: 600; }
+  .login-btn { margin-top: 22px; width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px; background: #fff; color: #1F1F1F; border: 1.5px solid #DADCE0; border-radius: 10px; padding: 12px; font-size: 15px; font-weight: 700; font-family: inherit; cursor: pointer; }
+  .login-btn:hover { background: #F8F9FA; border-color: #C8A532; }
+  .login-btn:disabled { opacity: 0.6; cursor: wait; }
+  .login-msg { margin-top: 14px; font-size: 13px; color: #B02800; font-weight: 600; background: #FDECE6; border-radius: 8px; padding: 8px 10px; }
+  .login-foot { margin-top: 18px; font-size: 11.5px; color: #9A8050; display: flex; align-items: center; justify-content: center; gap: 5px; }
+  .acct-btn { margin-left: auto; background: transparent; color: #B8A877; border: 1.5px solid #3A3520; border-radius: 9px; width: 36px; height: 34px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; font-size: 17px; }
+  .acct-btn:hover { color: #C8A532; border-color: #C8A532; }
+  .acct-btn + .replies-btn { margin-left: 8px; }
   /* ── Replies panel ── */
   .replies-btn { margin-left: auto; position: relative; display: inline-flex; align-items: center; gap: 6px; background: transparent; color: #C8A532; border: 1.5px solid #C8A532; border-radius: 9px; padding: 7px 13px; font-size: 12.5px; font-weight: 700; cursor: pointer; font-family: inherit; white-space: nowrap; }
   .replies-btn .ti { font-size: 16px; }
@@ -598,6 +612,20 @@ window.isMeaningfullyDifferentPoiName = function(name, address) {
 </style>
 </head>
 <body>
+<div class="login-screen" id="loginScreen">
+  <div class="login-card">
+    <img src="https://i.ibb.co/Kc2B52nS/download-1.png" alt="" class="login-logo" />
+    <div class="login-title">MC-151's Dispatch Console</div>
+    <div class="login-sub">Chaverim Bergen County</div>
+    <button type="button" class="login-btn" id="loginBtn" onclick="window.loginGoogle()">
+      <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>
+      Sign in with Google
+    </button>
+    <div class="login-msg" id="loginMsg" style="display:none"></div>
+    <div class="login-foot"><i class="ti ti-lock"></i> Authorized dispatcher only</div>
+  </div>
+</div>
+
 
 <div class="toast" id="toast"></div>
 
@@ -639,6 +667,7 @@ window.isMeaningfullyDifferentPoiName = function(name, address) {
     <div class="brand-sub">Bergen County</div>
     <div class="brand-tag">MC-151's Dispatch Console</div>
   </div>
+  <button type="button" class="acct-btn" id="acctBtn" onclick="window.logout()" style="display:none" title="Sign out"><i class="ti ti-logout"></i></button>
   <button type="button" class="replies-btn" id="repliesBtn" onclick="window.openReplies()" title="Replies to your WhatsApp messages">
     <i class="ti ti-message-reply"></i> Replies <span class="replies-badge" id="repliesBadge" style="display:none">0</span>
   </button>
@@ -1038,7 +1067,8 @@ window.isMeaningfullyDifferentPoiName = function(name, address) {
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-app.js";
-import { getDatabase, ref, get, set, update, remove, onValue, runTransaction } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-database.js";
+import { getDatabase, ref, get as _get, set, update, remove, onValue as _onValue, runTransaction } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-database.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, onIdTokenChanged, signOut } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyBLbU8jdXP7UEtkndbpcM1I3EeZcChtMpU",
@@ -1052,6 +1082,83 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
+
+// ── Login ── only this Google account can use the console. The database rules
+// and the Worker check it too, so the page can't be used without signing in.
+const ALLOWED_EMAIL = 'shmueleidelman.work@gmail.com';
+const auth = getAuth(app);
+let authUser = null, bcToken = '', authWasReady = false, resolveAuthReady;
+const authReady = new Promise(function(r) { resolveAuthReady = r; });
+
+// Nothing is read from the database until you're signed in
+function onValue(r, cb, errCb) {
+  var unsub = null, cancelled = false;
+  authReady.then(function() { if (!cancelled) unsub = _onValue(r, cb, errCb); });
+  return function() { cancelled = true; if (unsub) unsub(); };
+}
+async function get(r) { await authReady; return _get(r); }
+
+// Calls to the bc-waha Worker carry your sign-in
+async function bcFetch(url, opts) {
+  await authReady;                 // wait until you're signed in
+  opts = Object.assign({}, opts || {});
+  opts.headers = Object.assign({}, opts.headers || {});
+  if (authUser) {
+    try { bcToken = await authUser.getIdToken(); } catch (e) {}
+  }
+  if (bcToken) opts.headers['Authorization'] = 'Bearer ' + bcToken;
+  return fetch(url, opts);
+}
+function bcWsAuth() { return bcToken ? 'auth=' + encodeURIComponent(bcToken) : ''; }
+
+function loginShow(msg) {
+  var o = document.getElementById('loginScreen');
+  if (o) o.style.display = 'flex';
+  var m = document.getElementById('loginMsg');
+  if (m) { m.textContent = msg || ''; m.style.display = msg ? '' : 'none'; }
+}
+window.loginGoogle = async function() {
+  var btn = document.getElementById('loginBtn');
+  if (btn) btn.disabled = true;
+  try {
+    var provider = new GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: 'select_account', login_hint: ALLOWED_EMAIL });
+    await signInWithPopup(auth, provider);
+  } catch (e) {
+    if (e && e.code !== 'auth/popup-closed-by-user' && e.code !== 'auth/cancelled-popup-request') {
+      loginShow('Sign-in failed: ' + ((e && e.code) || e));
+    }
+  } finally { if (btn) btn.disabled = false; }
+};
+window.logout = async function() {
+  if (!confirm('Sign out of the console?')) return;
+  await signOut(auth);
+};
+onIdTokenChanged(auth, function(user) {
+  if (user) user.getIdToken().then(function(t) { bcToken = t; }).catch(function() {});
+  else bcToken = '';
+});
+onAuthStateChanged(auth, async function(user) {
+  if (user && user.emailVerified && String(user.email || '').toLowerCase() === ALLOWED_EMAIL) {
+    authUser = user;
+    try { bcToken = await user.getIdToken(); } catch (e) {}
+    document.getElementById('loginScreen').style.display = 'none';
+    var acct = document.getElementById('acctBtn');
+    if (acct) { acct.style.display = ''; acct.title = 'Signed in as ' + user.email + ' \u2014 click to sign out'; }
+    authWasReady = true;
+    resolveAuthReady();
+    return;
+  }
+  if (user) {
+    var who = user.email || 'that account';
+    await signOut(auth);
+    loginShow(who + ' isn\u2019t allowed to use this console.');
+    return;
+  }
+  authUser = null; bcToken = '';
+  if (authWasReady) { location.reload(); return; }   // signed out: start fresh
+  loginShow('');
+});
 
 // ── State ──
 window.isUrgent = false;
@@ -1275,7 +1382,7 @@ window.requestI911Location = async function() {
 
   var resp, data;
   try {
-    resp = await fetch(I911_PROXY_BASE + '/i911', {
+    resp = await bcFetch(I911_PROXY_BASE + '/i911', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ phonenumber: e164 })
@@ -1306,7 +1413,7 @@ window.connectI911Socket = function(webSocketURL) {
 
   var ws;
   try {
-    ws = new WebSocket(I911_PROXY_BASE.replace(/^http/, 'ws') + '/i911/listen?token=' + encodeURIComponent(token));
+    ws = new WebSocket(I911_PROXY_BASE.replace(/^http/, 'ws') + '/i911/listen?token=' + encodeURIComponent(token) + '&' + bcWsAuth());
   } catch (e) { i911Failed('could not open the location feed'); return; }
   window._i911Socket = ws;
   var gotLocation = false;
@@ -2585,7 +2692,7 @@ window.loadNhtsaModels = async function() {
   var models = nhtsaCache[key];
   if (!models) {
     try {
-      var r = await fetch(NHTSA_PROXY + '?make=' + encodeURIComponent(nhtsaMakeName(make)) + (year ? '&year=' + year : ''));
+      var r = await bcFetch(NHTSA_PROXY + '?make=' + encodeURIComponent(nhtsaMakeName(make)) + (year ? '&year=' + year : ''));
       if (!r.ok) throw new Error('HTTP ' + r.status);
       var j = await r.json();
       models = Array.isArray(j.models) ? j.models : [];
@@ -3449,7 +3556,7 @@ const WAHA_LAST_CALL_URL = 'https://bc-waha.shmueleidelman-work.workers.dev/last
 
 async function getGroupLastCallNumber() {
   try {
-    var resp = await fetch(WAHA_LAST_CALL_URL, { cache: 'no-store' });
+    var resp = await bcFetch(WAHA_LAST_CALL_URL, { cache: 'no-store' });
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
     var data = await resp.json();
     var n = parseInt(data && data.lastCallNumber, 10);
@@ -3496,7 +3603,7 @@ async function sendViaWaha(text, replyTo, to, callId) {
     if (replyTo) payload.reply_to = replyTo;
     if (to) payload.to = to;   // 'bc' (default) or 'interstate'
     if (callId) payload.call = callId;   // so replies to this message attach to the call
-    var resp = await fetch(WAHA_PROXY_URL, {
+    var resp = await bcFetch(WAHA_PROXY_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -4183,7 +4290,7 @@ window.rpSend = async function() {
     if (rp.quoteId) payload.reply_to = rp.quoteId;
     var callFor = rp.quoteCall || (rp.threads[rp.key] || {}).lastCall || '';
     if (callFor) payload.call = String(callFor);
-    var resp = await fetch(WAHA_PROXY_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    var resp = await bcFetch(WAHA_PROXY_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
     var data = await resp.json().catch(function() { return null; });
     if (!resp.ok) { showToast('Not sent: ' + ((data && data.error) || ('HTTP ' + resp.status))); return; }
     input.value = '';
@@ -4321,9 +4428,10 @@ function pttUpdateUi() {
 
 // ── Connection (stays open; reconnects on its own) ──
 function zelloConnect() {
+  if (!bcToken) return;            // connects once you're signed in
   zelloDisconnect();
   var ws;
-  try { ws = new WebSocket(ZELLO_WS_URL + '?channel=' + encodeURIComponent(zcChannel())); }
+  try { ws = new WebSocket(ZELLO_WS_URL + '?channel=' + encodeURIComponent(zcChannel()) + '&' + bcWsAuth()); }
   catch (e) { zelloScheduleReconnect(); return; }
   ws.binaryType = 'arraybuffer';
   zc.ws = ws;
@@ -4794,7 +4902,7 @@ function pttStop() {
   });
 
   pttUpdateUi();
-  zelloConnect();
+  authReady.then(zelloConnect);
 })();
 
 // ── Equipment for the call (COBC) ───────────────────────────────────
@@ -5070,7 +5178,7 @@ window.loadEquipment = async function() {
   if (equip.loading) return;
   equip.loading = true;
   try {
-    var r = await fetch(EQUIP_URL, { cache: 'no-store' });
+    var r = await bcFetch(EQUIP_URL, { cache: 'no-store' });
     var data = await r.json().catch(function() { return null; });
     if (!r.ok || !data || !data.ok) throw new Error((data && data.error) || ('HTTP ' + r.status));
     equip.items = Array.isArray(data.items) ? data.items : [];
